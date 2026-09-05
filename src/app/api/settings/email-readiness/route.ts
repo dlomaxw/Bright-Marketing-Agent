@@ -8,7 +8,13 @@ import { checkSendingDomain, fetchSpaceshipDnsRecords } from '@/server/emails/dn
 
 const schema = z.object({
   domain: z.string().max(200).optional(),
-  dkimSelector: z.string().max(60).default('default'),
+  /**
+   * No default here on purpose. The correct selector for the configured mail
+   * provider lives in checkSendingDomain, and duplicating it meant this route
+   * silently overrode it — reporting DKIM as missing on a domain whose DKIM
+   * verifies. Omitted means "use the provider default".
+   */
+  dkimSelector: z.string().max(60).optional(),
   /** Opens an authenticated SMTP connection. Sends nothing. */
   testConnection: z.coerce.boolean().default(false),
 });
