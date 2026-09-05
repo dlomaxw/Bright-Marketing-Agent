@@ -170,9 +170,21 @@ export async function deliverBySmtp(message: OutgoingMessage): Promise<string> {
     // avoids both the tracking-pixel question and the HTML rendering lottery.
     text: message.body,
     headers: {
-      'X-Mailer': 'BrightScope',
-      // Lets a recipient's provider group the conversation sensibly.
-      'X-Entity-Ref-ID': `brightscope-${Date.now()}`,
+      /**
+       * A recipient who wants out must be able to get out without composing a
+       * reply, and mail providers check for exactly this. Gmail and Yahoo have
+       * required an unsubscribe mechanism from bulk senders since February
+       * 2024, and its absence is a strong negative signal — but the better
+       * reason is that this application already records `optedOut` on a
+       * contact and refuses to send to them. Tracking opt-outs while offering
+       * no way to opt out is the wrong half of the feature.
+       *
+       * mailto: is used rather than one-click HTTPS because one-click requires
+       * a public POST endpoint that honours the request without confirmation.
+       * That is worth building once the application is deployed; promising
+       * one-click without it would be worse than not offering it.
+       */
+      'List-Unsubscribe': `<mailto:${env.EMAIL_FROM_ADDRESS}?subject=unsubscribe>`,
     },
   });
 

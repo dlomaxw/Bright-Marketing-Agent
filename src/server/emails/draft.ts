@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { AppError } from '@/lib/api';
 import { logActivity } from '@/server/activity';
 import { getSetting } from '@/server/settings';
+import { BRAND } from '@/config/brand';
 import type { SessionUser } from '@/server/auth/session';
 
 /**
@@ -110,6 +111,20 @@ export async function createEmailDraft(args: {
     '',
     'Kind regards,',
     args.user.signature?.trim() || [args.user.name, brand.companyName].filter(Boolean).join('\n'),
+    '',
+    /**
+     * A footer that says who sent this, from where, and how to stop it.
+     *
+     * Not decoration. An unsolicited business message carrying none of that
+     * reads as bulk mail to a filter and as a nuisance to a person. The
+     * application already records `optedOut` on a contact and refuses to send
+     * to them, so the way out has to actually exist — tracking opt-outs while
+     * offering no way to opt out is the wrong half of the feature.
+     */
+    '--',
+    [BRAND.legalEntity, BRAND.address].filter(Boolean).join(' · '),
+    BRAND.phones.join(' · '),
+    `You are receiving this because we audit publicly available business websites. Reply with "unsubscribe" and we will not contact ${orgName} again.`,
   ].join('\n');
 
   const latest = await db.emailDraft.findFirst({

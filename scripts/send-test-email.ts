@@ -25,26 +25,39 @@ async function main() {
   }
 
   const sentAt = new Date().toISOString();
+  const from = process.env.EMAIL_FROM_ADDRESS!;
+
+  /**
+   * Shaped like a real message rather than a machine test.
+   *
+   * A tiny plain body with a subject like "delivery test", no sender identity
+   * and no way to unsubscribe is a spam signature in its own right — so a test
+   * written that way tells you about the test, not about the sender. This
+   * carries what a genuine outreach message carries, including the
+   * List-Unsubscribe header the outreach path now sets.
+   */
   const messageId = await deliverBySmtp({
     to,
     toName: to,
-    from: process.env.EMAIL_FROM_ADDRESS!,
+    from,
     fromName: process.env.EMAIL_FROM_NAME ?? 'Bright Thoughts Services',
     replyTo: null,
-    subject: `BrightScope delivery test — ${sentAt.slice(0, 19)}Z`,
+    subject: 'Checking our email setup',
     body: [
-      'This is an automated delivery test from BrightScope.',
+      'Hello,',
       '',
-      `Sent: ${sentAt}`,
-      `Sender: ${process.env.EMAIL_FROM_ADDRESS}`,
-      `Server: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`,
+      'This is a short message to confirm our email is configured correctly.',
+      'If it reached your inbox, sending is working as intended.',
       '',
-      'If you are reading this, SMTP authentication and delivery both work.',
-      'Check whether it arrived in the inbox or the spam folder, and open',
-      '"Show original" in Gmail to see the SPF, DKIM and DMARC results.',
+      `Sent ${sentAt.slice(0, 19).replace('T', ' ')} UTC from ${process.env.SMTP_HOST}.`,
       '',
-      'No prospect was contacted. This message was not generated from a lead',
-      'record and did not pass through the outreach approval gates.',
+      'Kind regards,',
+      'Bright Thoughts Services',
+      '',
+      '--',
+      'Bright Thoughts Services · The Square Building, 3rd Street, Industrial Area, Kampala, Uganda',
+      '+256 750 421 224 · +256 761 832 333',
+      `Reply with "unsubscribe" to stop receiving messages from us.`,
     ].join('\n'),
   });
 
