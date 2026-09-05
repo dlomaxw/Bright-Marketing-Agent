@@ -27,7 +27,8 @@
     "build:check": "NEXT_DIST_DIR=.next-verify next build",
     "email:check": "tsx scripts/email-readiness.ts",
     "storage:check": "tsx scripts/storage-check.ts",
-    "user:create": "tsx scripts/create-user.ts"
+    "user:create": "tsx scripts/create-user.ts",
+    "email:auth": "tsx scripts/email-auth-check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
