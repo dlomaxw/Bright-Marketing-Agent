@@ -1,7 +1,7 @@
 node_modules/
-.next/
-out/
-dist/
+/.next/
+/out/
+/dist/
 .env
 .env.*
 !.env.example
@@ -9,8 +9,8 @@ dist/
 *.db
 *.db-journal
 prisma/dev.db*
-storage/
-coverage/
+/storage/
+/coverage/
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
