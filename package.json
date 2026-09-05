@@ -1,0 +1,70 @@
+{
+  "name": "brightscope",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BrightScope - Marketing Audit & Outreach Intelligence Tool for Bright Thoughts Services",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "worker": "tsx src/worker/main.ts",
+    "fixtures": "tsx fixtures/server.ts",
+    "db:use": "tsx scripts/db-provider.ts",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "setup": "prisma generate && prisma db push && npm run db:seed",
+    "import": "tsx scripts/import-cli.ts",
+    "import:uma": "tsx scripts/import-uma.ts",
+    "demo:remove": "tsx scripts/remove-demo-data.ts",
+    "verify": "tsc --noEmit && vitest run",
+    "build:check": "NEXT_DIST_DIR=.next-verify next build",
+    "email:check": "tsx scripts/email-readiness.ts",
+    "storage:check": "tsx scripts/storage-check.ts",
+    "user:create": "tsx scripts/create-user.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1126.0",
+    "@prisma/client": "^6.2.1",
+    "cheerio": "^1.0.0",
+    "clsx": "^2.1.1",
+    "docx": "^9.1.0",
+    "dotenv": "^17.4.2",
+    "jose": "^5.9.6",
+    "next": "^15.1.4",
+    "nodemailer": "^10.0.0",
+    "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.15.2",
+    "pptxgenjs": "^4.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.5",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.13.9",
+    "@types/react": "^19.0.5",
+    "@types/react-dom": "^19.0.2",
+    "prisma": "^6.2.1",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}

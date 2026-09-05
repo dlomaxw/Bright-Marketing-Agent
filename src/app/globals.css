@@ -1,0 +1,176 @@
+@import 'tailwindcss';
+
+/*
+ * Bright Thoughts palette. Everything the interface uses is derived here so the
+ * brand colours live in exactly one place (mirrored in src/config/brand.ts for
+ * the document renderers, which cannot read CSS).
+ */
+@theme {
+  --color-navy: #061a33;
+  --color-blue: #0b3265;
+  --color-gold: #f2b705;
+  --color-canvas: #eef3f8;
+  --color-ink: #172033;
+
+  --color-blue-700: #0a2b58;
+  --color-blue-100: #dbe6f4;
+  --color-line: #d8e1ec;
+  --color-line-soft: #e7edf5;
+  --color-muted: #5b6b7f;
+  --color-muted-soft: #8496a9;
+
+  --color-critical: #b3261e;
+  --color-critical-bg: #fdeceb;
+  --color-high: #b45309;
+  --color-high-bg: #fdf3e3;
+  --color-medium: #0b3265;
+  --color-medium-bg: #e6edf7;
+  --color-low: #4a5a6d;
+  --color-low-bg: #eef2f7;
+  --color-good: #0f6b46;
+  --color-good-bg: #e6f4ee;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible, consistent focus for keyboard users everywhere. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--color-navy);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 0 0 6px 0;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* Table conventions used across every list screen. */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7fafd;
+  color: var(--color-muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+.data-table tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+  vertical-align: top;
+}
+.data-table tbody tr:hover {
+  background: #f9fbfe;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Markdown preview inside the report and proposal editors. */
+.prose-report h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-navy);
+  margin: 20px 0 8px;
+}
+.prose-report h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-blue);
+  margin: 18px 0 6px;
+}
+.prose-report h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-blue);
+  margin: 14px 0 4px;
+}
+.prose-report p {
+  margin: 0 0 10px;
+}
+.prose-report ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  list-style: disc;
+}
+.prose-report ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  list-style: decimal;
+}
+.prose-report li {
+  margin-bottom: 4px;
+}
+.prose-report table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.prose-report th,
+.prose-report td {
+  border: 1px solid var(--color-line);
+  padding: 7px 10px;
+  text-align: left;
+}
+.prose-report th {
+  background: var(--color-canvas);
+  font-weight: 600;
+}
+.prose-report strong {
+  font-weight: 650;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}

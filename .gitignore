@@ -1,0 +1,33 @@
+node_modules/
+.next/
+out/
+dist/
+.env
+.env.*
+!.env.example
+.env.local
+*.db
+*.db-journal
+prisma/dev.db*
+storage/
+coverage/
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Plaintext credential notes. Secrets belong in .env (also ignored) or a secret
+# store — never in the repository.
+/api
+api.txt
+*credentials*
+*secrets*
+!src/app/api
+
+# Third-party personal data. The UMA directory lists named individuals at 1,529
+# Ugandan companies with their telephone numbers and email addresses. It is
+# licensed source material for this deployment, not ours to republish — and this
+# repository is public. Keep it local, or move it to a private repository.
+docs/UMA-Dirrectory-2026.pdf
+docs/uma-extracted.txt
+docs/Marketing_Audit_Outreach_Tool_Product_Documentation.docx
+*.pdf

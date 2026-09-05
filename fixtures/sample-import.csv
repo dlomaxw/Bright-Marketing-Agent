@@ -1,0 +1,4 @@
+Score,Organization,Industry,Website,Status/Issue,Contact,Email,Phone,Sales offer,Public source URL
+78,Kampala Commercial Bank,Finance,https://kampala-bank.test,No HTTPS security headers and site returns 500 error,David Mukasa,david@kampala-bank.test,+256772000001,Web Security Hardening,https://kampala-bank.test/about
+64,Entebbe Logistics Ltd,Logistics,https://entebbe-logistics.test,Missing robots.txt file and slow site speed,Grace Akello,grace@entebbe-logistics.test,+256772000002,SEO Optimization & Web Vitals,https://entebbe-logistics.test/contact
+82,Jinja Manufacturing Co,Manufacturing,https://jinja-manufacture.test,Unresponsive mobile layout and broken links,Patrick Okello,patrick@jinja-manufacture.test,+256772000003,Mobile UX Redesign,https://jinja-manufacture.test

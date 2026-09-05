@@ -1,0 +1,803 @@
+// BrightScope data model.
+//
+// PORTABILITY CONTRACT (see docs/ARCHITECTURE.md 2.1):
+//   * no `@db.*` native type attributes
+//   * no database `enum` types  -> String columns validated by Zod in src/lib/enums.ts
+//   * no `Json` columns and no scalar lists -> JSON persisted as String, parsed through Zod
+// This keeps one schema valid on both SQLite (dev) and PostgreSQL (production).
+// Switch with: npm run db:use postgres
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity and access
+// ---------------------------------------------------------------------------
+
+model Role {
+  code        String   @id // admin | auditor | sales | approver | viewer
+  name        String
+  description String
+  users       User[]
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  passwordHash   String
+  roleCode       String
+  role           Role      @relation(fields: [roleCode], references: [code])
+  status         String    @default("active") // active | suspended
+  seniorApprover Boolean   @default(false) // may approve sensitive-sector outreach
+  signature      String? // approved email signature block
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  ownedOrganizations Organization[] @relation("OrgOwner")
+  sessions           Session[]
+  activities         Activity[]
+  auditRuns          AuditRun[]
+  reviewedFindings   Finding[]      @relation("FindingReviewer")
+  approvals          Approval[]     @relation("ApprovalDecider")
+  submittedApprovals Approval[]     @relation("ApprovalSubmitter")
+  tasksOwned         Task[]         @relation("TaskOwner")
+  tasksCreated       Task[]         @relation("TaskCreator")
+  meetings           Meeting[]
+  notifications      Notification[]
+  emailDrafts        EmailDraft[]   @relation("EmailAuthor")
+
+  @@index([roleCode])
+  @@index([status])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Prospect records
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id         String  @id @default(cuid())
+  legalName  String
+  brandName  String?
+  industry   String?
+  country    String  @default("Uganda")
+  city       String?
+  website    String?
+  // normalized registrable host, lowercase, no scheme/www/path - the dedupe key
+  domainKey  String?
+  nameKey    String // normalized legal name - secondary dedupe key
+  notes      String?
+  tagsJson   String  @default("[]") // string[]
+  sector     String  @default("standard") // standard | government | health | education | finance | regulated
+
+  stage       String  @default("new") // see PIPELINE_STAGES in src/lib/enums.ts
+  ownerId     String?
+  owner       User?   @relation("OrgOwner", fields: [ownerId], references: [id])
+  source      String  @default("manual") // manual | import | referral | research
+  sourceUrl   String?
+
+  // Commercial tracking
+  opportunityValue Float?
+  probability      Int? // 0-100
+  currency         String  @default("UGX")
+  wonReason        String?
+  lostReason       String?
+  closedAt         DateTime?
+
+  // Scores - full component breakdown lives in scoreBreakdownJson so the UI can explain them
+  opportunityScore     Int?
+  confidenceScore      Int?
+  relationshipRisk     Int?
+  scoreBreakdownJson   String?
+  scoredAt             DateTime?
+
+  // Imported reference data (documentation 21)
+  isDemoData             Boolean @default(false)
+  importedScore          Int?
+  importBatchId          String?
+  suggestedServiceCodes  String  @default("[]") // string[]
+
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  contacts     Contact[]
+  profiles     PlatformProfile[]
+  auditRuns    AuditRun[]
+  findings     Finding[]
+  reports      Report[]
+  proposals    Proposal[]
+  emailDrafts  EmailDraft[]
+  tasks        Task[]
+  meetings     Meeting[]
+  activities   Activity[]
+  attachments  Attachment[]
+
+  @@index([domainKey])
+  @@index([nameKey])
+  @@index([stage])
+  @@index([ownerId])
+  @@index([opportunityScore])
+  @@index([deletedAt])
+}
+
+model Contact {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  role           String?
+  email          String?
+  emailKey       String? // lowercase email, dedupe key
+  phone          String?
+  phoneKey       String? // E.164, dedupe key
+  whatsapp       String?
+  isPrimary      Boolean @default(false)
+
+  // Provenance is mandatory for any contact used in outreach
+  sourceUrl          String?
+  sourceNote         String?
+  verificationStatus String  @default("unverified") // unverified | verified | outdated
+  verifiedAt         DateTime?
+  verifiedBy         String?
+
+  optedOut   Boolean   @default(false)
+  optOutAt   DateTime?
+  optOutNote String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  emailDrafts EmailDraft[]
+  messages    Message[]
+
+  @@index([organizationId])
+  @@index([emailKey])
+  @@index([phoneKey])
+}
+
+model PlatformProfile {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  platform       String // facebook | instagram | linkedin | x | tiktok | youtube | google_business
+  url            String
+  handle         String?
+  verificationStatus String @default("unverified")
+  // Manual review answers, shaped by src/audit/social/checklist.ts
+  checklistJson  String  @default("{}")
+  followers      Int? // only ever written from an authorized API
+  lastPostAt     DateTime?
+  lastCheckedAt  DateTime?
+  checkedBy      String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, platform, url])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit engine
+// ---------------------------------------------------------------------------
+
+model AuditRun {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedById  String?
+  requestedBy    User?   @relation(fields: [requestedById], references: [id])
+  targetUrl      String?
+  scopeJson      String  @default("[]") // selected check group codes
+  status         String  @default("queued") // queued | running | completed | failed | partial
+  engineVersion  String
+  startedAt      DateTime?
+  completedAt    DateTime?
+  errorMessage   String?
+  statsJson      String  @default("{}") // counts by outcome
+  createdAt      DateTime @default(now())
+
+  jobs         AuditJob[]
+  observations Observation[]
+  findings     Finding[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model AuditJob {
+  id          String   @id @default(cuid())
+  auditRunId  String
+  auditRun    AuditRun @relation(fields: [auditRunId], references: [id], onDelete: Cascade)
+  groupCode   String // availability | cms | seo | content | performance | mobile | conversion | trust | local | social | gbp
+  status      String   @default("queued") // queued | claimed | running | completed | failed
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
+  claimedAt   DateTime?
+  claimedBy   String?
+  runAfter    DateTime @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([status, runAfter])
+  @@index([auditRunId])
+}
+
+/// Raw, deterministic measurement. Never edited by a human, never written by AI.
+model Observation {
+  id          String   @id @default(cuid())
+  auditRunId  String
+  auditRun    AuditRun @relation(fields: [auditRunId], references: [id], onDelete: Cascade)
+  groupCode   String
+  checkCode   String
+  outcome     String // pass | issue | info | unverifiable | skipped
+  url         String?
+  rawValueJson String  @default("{}")
+  detail      String?
+  reason      String? // why unverifiable / skipped
+  source      String   @default("automated") // automated | manual_pending | manual_verified | imported | api
+  observedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  evidence Evidence[]
+  findings Finding[]
+
+  @@index([auditRunId])
+  @@index([checkCode])
+  @@index([outcome])
+}
+
+model Evidence {
+  id            String   @id @default(cuid())
+  observationId String?
+  observation   Observation? @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  findingId     String?
+  finding       Finding? @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  kind          String // http_response | html_snippet | header | redirect_chain | screenshot | tls | analyst_note | api_response
+  sourceUrl     String?
+  contentType   String?
+  // Small artifacts inline; large ones referenced by storageRef
+  content       String?
+  storageRef    String?
+  sha256        String?
+  bytes         Int?
+  capturedAt    DateTime @default(now())
+  capturedBy    String?
+  createdAt     DateTime @default(now())
+
+  @@index([observationId])
+  @@index([findingId])
+}
+
+/// A classified, human-reviewable issue. The only thing a report may cite.
+model Finding {
+  id             String  @id @default(cuid())
+  reference      String  @unique // human-facing id, e.g. BTS-F-000123
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditRunId     String?
+  auditRun       AuditRun? @relation(fields: [auditRunId], references: [id])
+  observationId  String?
+  observation    Observation? @relation(fields: [observationId], references: [id])
+
+  checkCode String
+  category  String // availability | cms | seo | content | performance | mobile | accessibility | conversion | trust | social | local
+  severity  String // critical | high | medium | low | informational
+  confidence String // high | medium | low
+
+  observation_text String // neutral statement of what was detected
+  businessImpact   String // phrased as risk/opportunity, never certainty
+  recommendation   String
+  recommendedServiceCodes String @default("[]")
+
+  evidenceUrl String?
+  observedAt  DateTime
+
+  verificationStatus String  @default("auto_detected") // auto_detected | needs_review | manually_verified | dismissed | fixed | outdated
+  clientVisible      Boolean @default(false)
+  dismissReason      String?
+  analystNote        String?
+
+  reviewerId String?
+  reviewer   User?     @relation("FindingReviewer", fields: [reviewerId], references: [id])
+  reviewedAt DateTime?
+
+  source                String  @default("automated") // automated | manual | imported
+  requiresReverification Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  evidence     Evidence[]
+  reportItems  ReportFinding[]
+  emailRefs    EmailDraftFinding[]
+
+  @@index([organizationId])
+  @@index([verificationStatus])
+  @@index([severity])
+  @@index([category])
+}
+
+// ---------------------------------------------------------------------------
+// Services and pricing
+// ---------------------------------------------------------------------------
+
+model ServiceModule {
+  id              String  @id @default(cuid())
+  code            String  @unique
+  name            String
+  family          String
+  summary         String
+  deliverablesJson String @default("[]")
+  defaultPhase    String  @default("phase_1")
+  // Which finding categories/checks suggest this module (documentation 10.0)
+  triggerCategoriesJson String @default("[]")
+  triggerCheckCodesJson String @default("[]")
+  active          Boolean @default(true)
+  sortOrder       Int     @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  prices        ServicePrice[]
+  proposalItems ProposalItem[]
+}
+
+/// Prices are entered by an authorized human. AI output can never populate this table.
+model ServicePrice {
+  id              String  @id @default(cuid())
+  serviceModuleId String
+  serviceModule   ServiceModule @relation(fields: [serviceModuleId], references: [id], onDelete: Cascade)
+  currency        String // UGX | USD
+  unit            String  @default("project") // project | month | page | hour
+  amount          Float
+  setBy           String
+  setAt           DateTime @default(now())
+  active          Boolean  @default(true)
+
+  @@unique([serviceModuleId, currency, unit])
+}
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+model Report {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version        Int     @default(1)
+  title          String
+  status         String  @default("draft") // draft | pending_approval | changes_requested | approved | rejected | superseded
+  auditRunIdsJson String @default("[]")
+  preparedBy     String?
+  approvedById   String?
+  approvedAt     DateTime?
+  generatedByAi  Boolean @default(false)
+  aiOutputJson   String? // raw validated model output for traceability
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  sections  ReportSection[]
+  findings  ReportFinding[]
+  approvals Approval[]
+  proposals Proposal[]
+  emailDrafts EmailDraft[]
+
+  @@unique([organizationId, version])
+  @@index([status])
+}
+
+model ReportSection {
+  id        String @id @default(cuid())
+  reportId  String
+  report    Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  key       String // cover | executive_summary | presence | website_findings | ... | appendix
+  heading   String
+  body      String
+  sortOrder Int    @default(0)
+  included  Boolean @default(true)
+  editedByHuman Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reportId, key])
+}
+
+model ReportFinding {
+  id        String  @id @default(cuid())
+  reportId  String
+  report    Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  findingId String
+  finding   Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  included  Boolean @default(true)
+  excludeReason String?
+  sortOrder Int     @default(0)
+
+  @@unique([reportId, findingId])
+}
+
+// ---------------------------------------------------------------------------
+// Proposals
+// ---------------------------------------------------------------------------
+
+model Proposal {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reportId       String?
+  report         Report? @relation(fields: [reportId], references: [id])
+  version        Int     @default(1)
+  title          String
+  status         String  @default("draft") // draft | pending_approval | changes_requested | approved | rejected | presented | superseded
+
+  // Narrative sections (AI may draft these)
+  situation        String?
+  objectives       String?
+  solution         String?
+  scope            String?
+  deliverables     String?
+  phases           String?
+  timeline         String?
+  clientResponsibilities String?
+  requiredAssets   String?
+
+  // Commercial fields - human-only (docs/PERMISSIONS.md proposal.set_commercials)
+  currency        String  @default("UGX")
+  subtotal        Float   @default(0)
+  discount        Float   @default(0)
+  taxRate         Float   @default(0)
+  taxAmount       Float   @default(0)
+  total           Float   @default(0)
+  paymentSchedule String?
+  assumptions     String?
+  exclusions      String?
+  changeControl   String?
+  validUntil      DateTime?
+  acceptanceTerms String?
+  nextSteps       String?
+  commercialsSetBy String?
+  commercialsSetAt DateTime?
+
+  generatedByAi Boolean  @default(false)
+  aiOutputJson  String?
+  approvedById  String?
+  approvedAt    DateTime?
+  presentedAt   DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  items       ProposalItem[]
+  approvals   Approval[]
+  emailDrafts EmailDraft[]
+
+  @@unique([organizationId, version])
+  @@index([status])
+}
+
+model ProposalItem {
+  id              String @id @default(cuid())
+  proposalId      String
+  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  serviceModuleId String?
+  serviceModule   ServiceModule? @relation(fields: [serviceModuleId], references: [id])
+  name            String
+  description     String?
+  deliverablesJson String @default("[]")
+  phase           String @default("phase_1")
+  quantity        Float  @default(1)
+  unit            String @default("project")
+  unitFee         Float  @default(0)
+  lineTotal       Float  @default(0)
+  // Which verified findings justify this line - shown in the UI and the proposal
+  sourceFindingIdsJson String @default("[]")
+  sortOrder       Int    @default(0)
+
+  @@index([proposalId])
+}
+
+// ---------------------------------------------------------------------------
+// Outreach
+// ---------------------------------------------------------------------------
+
+model EmailDraft {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contactId      String?
+  contact        Contact? @relation(fields: [contactId], references: [id])
+  reportId       String?
+  report         Report?  @relation(fields: [reportId], references: [id])
+  proposalId     String?
+  proposal       Proposal? @relation(fields: [proposalId], references: [id])
+
+  version   Int    @default(1)
+  status    String @default("draft") // draft | needs_review | changes_requested | approved | scheduled | sent | delivered | bounced | replied | opted_out | cancelled
+  subject   String
+  body      String
+  toEmail   String?
+  toName    String?
+  senderId  String?
+  senderName String?
+  senderEmail String?
+  replyTo   String?
+  attachReport   Boolean @default(false)
+  attachProposal Boolean @default(false)
+  scheduledFor   DateTime?
+
+  authorId String?
+  author   User?   @relation("EmailAuthor", fields: [authorId], references: [id])
+
+  generatedByAi Boolean @default(false)
+  aiOutputJson  String?
+
+  // Snapshot of the send gates evaluated at approval time - re-evaluated at send
+  gateResultJson String?
+  approvedById   String?
+  approvedAt     DateTime?
+  sendKey        String? @unique // idempotency key, prevents duplicate sends
+  sentAt         DateTime?
+  sentById       String?
+  providerId     String?
+  sendChannel    String? // provider | manual
+  failureReason  String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  approvals Approval[]
+  findings  EmailDraftFinding[]
+  messages  Message[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model EmailDraftFinding {
+  id           String @id @default(cuid())
+  emailDraftId String
+  emailDraft   EmailDraft @relation(fields: [emailDraftId], references: [id], onDelete: Cascade)
+  findingId    String
+  finding      Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([emailDraftId, findingId])
+}
+
+/// Immutable communication history.
+model Message {
+  id           String  @id @default(cuid())
+  emailDraftId String?
+  emailDraft   EmailDraft? @relation(fields: [emailDraftId], references: [id])
+  contactId    String?
+  contact      Contact? @relation(fields: [contactId], references: [id])
+  direction    String // outbound | inbound
+  channel      String // email | phone | whatsapp | meeting | other
+  subject      String?
+  body         String?
+  providerId   String?
+  status       String  @default("logged")
+  occurredAt   DateTime @default(now())
+  loggedById   String?
+  createdAt    DateTime @default(now())
+
+  @@index([contactId])
+  @@index([emailDraftId])
+}
+
+model SuppressionEntry {
+  id        String   @id @default(cuid())
+  emailKey  String?  @unique
+  domainKey String?
+  reason    String // opt_out | bounce | complaint | manual | do_not_contact
+  note      String?
+  addedById String?
+  createdAt DateTime @default(now())
+
+  @@index([domainKey])
+}
+
+// ---------------------------------------------------------------------------
+// Approvals, workflow, CRM
+// ---------------------------------------------------------------------------
+
+model Approval {
+  id           String @id @default(cuid())
+  entityType   String // report | proposal | email
+  reportId     String?
+  report       Report? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  proposalId   String?
+  proposal     Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  emailDraftId String?
+  emailDraft   EmailDraft? @relation(fields: [emailDraftId], references: [id], onDelete: Cascade)
+
+  entityVersion Int
+  kind          String @default("content") // content | send
+  status        String @default("pending") // pending | approved | rejected
+  submittedById String?
+  submittedBy   User?   @relation("ApprovalSubmitter", fields: [submittedById], references: [id])
+  submittedAt   DateTime @default(now())
+  decidedById   String?
+  decidedBy     User?   @relation("ApprovalDecider", fields: [decidedById], references: [id])
+  decidedAt     DateTime?
+  comment       String?
+
+  @@index([status])
+  @@index([entityType])
+}
+
+model Task {
+  id             String  @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  type           String  @default("follow_up") // follow_up | call | email | research | meeting_prep | other
+  notes          String?
+  dueAt          DateTime?
+  status         String  @default("open") // open | done | cancelled
+  ownerId        String?
+  owner          User?   @relation("TaskOwner", fields: [ownerId], references: [id])
+  createdById    String?
+  createdBy      User?   @relation("TaskCreator", fields: [createdById], references: [id])
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, dueAt])
+  @@index([ownerId])
+  @@index([organizationId])
+}
+
+model Meeting {
+  id             String  @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String
+  scheduledFor   DateTime
+  durationMins   Int     @default(30)
+  attendees      String?
+  notes          String?
+  outcome        String?
+  status         String  @default("scheduled") // scheduled | held | no_show | cancelled
+  createdById    String?
+  createdBy      User?   @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([scheduledFor])
+}
+
+/// Append-only audit trail. No delete path exists in the application.
+model Activity {
+  id             String  @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  actorId        String?
+  actor          User?   @relation(fields: [actorId], references: [id])
+  action         String
+  entityType     String
+  entityId       String?
+  previousValue  String?
+  newValue       String?
+  reason         String?
+  metadataJson   String  @default("{}")
+  ip             String?
+  occurredAt     DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+  @@index([actorId])
+}
+
+model Attachment {
+  id             String  @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entityType     String
+  entityId       String?
+  filename       String
+  contentType    String?
+  bytes          Int?
+  storageRef     String
+  sha256         String?
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+model Template {
+  id        String  @id @default(cuid())
+  type      String // report_section | proposal_clause | email_body | follow_up
+  key       String
+  name      String
+  industry  String?
+  language  String  @default("en")
+  subject   String?
+  content   String
+  version   Int     @default(1)
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@unique([type, key, version])
+}
+
+model Integration {
+  id            String   @id @default(cuid())
+  code          String   @unique // pagespeed | google_places | email_provider | meta | linkedin | youtube | crm | storage
+  name          String
+  enabled       Boolean  @default(false)
+  // Credentials are read from environment variables; this table stores non-secret config only.
+  configJson    String   @default("{}")
+  status        String   @default("not_configured") // not_configured | configured | error
+  lastCheckedAt DateTime?
+  lastError     String?
+  updatedById   String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+/// Single-row-per-key configuration store: scoring weights, freshness window,
+/// frequency caps, retention windows, brand fields.
+model Setting {
+  key         String   @id
+  valueJson   String
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
