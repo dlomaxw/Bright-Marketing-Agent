@@ -29,9 +29,9 @@ async function withEnv(overrides: Record<string, string>) {
 const FULL = {
   SMTP_HOST: 'mail.spacemail.com',
   SMTP_PORT: '465',
-  SMTP_USER: 'hello@brightilluminated.com',
+  SMTP_USER: 'hello@shinebebright.com',
   SMTP_PASSWORD: 'secret',
-  EMAIL_FROM_ADDRESS: 'hello@brightilluminated.com',
+  EMAIL_FROM_ADDRESS: 'hello@shinebebright.com',
 };
 
 afterEach(() => {
@@ -72,7 +72,7 @@ describe('smtp configuration', () => {
     // The most common cause of silent spam-foldering.
     const { mod, restore } = await withEnv({
       ...FULL,
-      SMTP_USER: 'hello@brightilluminated.com',
+      SMTP_USER: 'hello@shinebebright.com',
       EMAIL_FROM_ADDRESS: 'sales@some-other-domain.com',
     });
     const problem = mod.smtpConfigProblems().find((p) => p.field === 'EMAIL_FROM_ADDRESS');

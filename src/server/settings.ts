@@ -71,12 +71,12 @@ const REGISTRY = {
   'brand.details': {
     schema: zBrand,
     default: {
-      companyName: 'Bright Illuminated Marketing',
+      companyName: 'Bright Thoughts Services',
       tagline: 'Bold ideas. Real results. Built bright.',
-      addressLine: 'The Square, Third Street, Kampala, Uganda',
-      contactEmail: 'brightthoughtsservices@gmail.com',
+      addressLine: 'The Square Building, 3rd Street, Industrial Area, Kampala, Uganda',
+      contactEmail: 'info@shinebebright.com',
       contactPhone: '+256 750 421 224',
-      websiteUrl: 'https://brightilluminated.com',
+      websiteUrl: 'https://www.shinebebright.com',
     },
   },
 } as const;

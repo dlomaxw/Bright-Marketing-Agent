@@ -1,9 +1,14 @@
 /**
- * Bright Illuminated Marketing & Bright Thoughts Services Brand Configuration.
- * Sourced directly from https://www.brightilluminated.com/
+ * Bright Thoughts Services — brand configuration.
+ *
+ * One name, confirmed by the owner. This file previously carried two trading
+ * names and a third domain, which meant a client could receive a report headed
+ * one way, an email signed another, and a reply-to address on a third domain.
+ * Everything client-facing reads from here, so treat a change as a change to
+ * the letterhead.
  */
 export const BRAND = {
-  companyName: 'Bright Illuminated Marketing',
+  companyName: 'Bright Thoughts Services',
   legalEntity: 'Bright Thoughts Services',
   productName: 'BrightScope',
   tagline: 'Bold ideas. Real results. Built bright.',
@@ -13,8 +18,8 @@ export const BRAND = {
   phone: '+256 750 421 224',
   phoneAlt: '+256 761 832 333',
   phones: ['+256 750 421 224', '+256 761 832 333'],
-  email: 'brightthoughtsservices@gmail.com',
-  websiteUrl: 'https://brightilluminated.com',
+  email: 'info@shinebebright.com',
+  websiteUrl: 'https://www.shinebebright.com',
   address: 'The Square Building, 3rd Street, Industrial Area, Kampala, Uganda',
   city: 'Kampala',
   country: 'Uganda',
@@ -29,7 +34,7 @@ export const BRAND = {
   logoFile: 'public/bright-logo-correct-cRUvVmUo.png',
   faviconPath: '/favicon.png',
 
-  // Brand Palette from https://www.brightilluminated.com/
+  // Brand palette.
   gold: '#FACC15', // Bright Yellow/Gold Theme Color
   goldDark: '#EAB308',
   navy: '#0F172A', // Slate 900 Deep Navy
@@ -38,7 +43,7 @@ export const BRAND = {
   lightBackground: '#F8FAFC',
   text: '#0F172A',
 
-  // Comprehensive Service Catalogue from brightilluminated.com
+  // Service catalogue.
   services: [
     { code: 'branding', name: 'Branding & Visual Identity', description: 'Brand strategy, logo design, style guides and visual positioning.' },
     { code: 'digital_marketing', name: 'Digital Marketing & SEO', description: 'Search engine optimization, paid ads, content strategy & lead generation.' },

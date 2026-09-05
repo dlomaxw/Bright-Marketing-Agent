@@ -7,7 +7,7 @@ import { checkSendingDomain, fetchSpaceshipDnsRecords } from '../src/server/emai
  * Checks whether outreach could actually be delivered, without sending anything.
  *
  *   npx tsx scripts/email-readiness.ts
- *   npx tsx scripts/email-readiness.ts --domain brightilluminated.com --selector spacemail
+ *   npx tsx scripts/email-readiness.ts --domain shinebebright.com --selector spacemail
  *   npx tsx scripts/email-readiness.ts --test-connection
  *
  * `--test-connection` opens an authenticated SMTP session and disconnects. That
