@@ -5,7 +5,7 @@
   "description": "BrightScope - Marketing Audit & Outreach Intelligence Tool for Bright Thoughts Services",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "tsx scripts/db-provider.ts postgres && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",

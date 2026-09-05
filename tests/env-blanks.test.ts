@@ -14,19 +14,19 @@ describe('environment blanks', () => {
       EMPTY: '',
       SPACES: '   ',
       REAL: 'value',
-    } as NodeJS.ProcessEnv);
+    } as unknown as NodeJS.ProcessEnv);
 
     expect(result).toEqual({ REAL: 'value' });
   });
 
   it('keeps values that are meaningfully falsy', () => {
     // "0" and "false" are real configuration, not absence.
-    const result = withoutBlanks({ ZERO: '0', FALSE: 'false' } as NodeJS.ProcessEnv);
+    const result = withoutBlanks({ ZERO: '0', FALSE: 'false' } as unknown as NodeJS.ProcessEnv);
     expect(result).toEqual({ ZERO: '0', FALSE: 'false' });
   });
 
   it('drops undefined entries rather than passing them through', () => {
-    const result = withoutBlanks({ MISSING: undefined, REAL: 'x' } as NodeJS.ProcessEnv);
+    const result = withoutBlanks({ MISSING: undefined, REAL: 'x' } as unknown as NodeJS.ProcessEnv);
     expect(Object.hasOwn(result, 'MISSING')).toBe(false);
     expect(result.REAL).toBe('x');
   });
