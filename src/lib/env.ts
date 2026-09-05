@@ -81,8 +81,28 @@ const schema = z.object({
   STORAGE_LOCAL_PATH: z.string().default('./storage'),
 });
 
+/**
+ * An unset variable and one set to the empty string mean the same thing here:
+ * not configured. They are not the same to Zod — `.default()` applies only to
+ * `undefined`, so an empty string reaches the validator and `z.coerce.number()`
+ * turns it into 0, which then fails `.positive()`.
+ *
+ * This is not hypothetical tidying. Hosting platforms hand unset variables to
+ * the build as empty strings, so a deployment failed on eighteen variables that
+ * all had perfectly good defaults — while every local run passed, because a
+ * local `.env` sets them. Empty means absent, and absent means use the default.
+ */
+export function withoutBlanks(source: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === 'string' && value.trim() === '') continue;
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 function load() {
-  const parsed = schema.safeParse(process.env);
+  const parsed = schema.safeParse(withoutBlanks(process.env));
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  ${i.path.join('.')}: ${i.message}`)
