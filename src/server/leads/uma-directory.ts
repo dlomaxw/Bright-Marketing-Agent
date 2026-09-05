@@ -370,12 +370,33 @@ export async function importUmaDirectory(
       continue;
     }
 
+    /**
+     * The name decides whether this is the same company. A shared domain does
+     * not.
+     *
+     * Matching on domain alone looked reasonable and silently lost 150 real
+     * companies from the first production import: group members publish one
+     * corporate site, so ATX TECHNOLOGY and BAVIMA STEEL both list
+     * bavimasteel.com, and FRIENDSHIP and FRIENDSHIP CONTAINER both list
+     * friendship.co.ke. The directory lists them separately, with their own
+     * contacts, telephone numbers and addresses, because they are separate
+     * businesses — each worth approaching on its own.
+     *
+     * A domain match with a different name is therefore recorded as a related
+     * organization for a human to look at, not merged away. Losing a prospect
+     * is invisible; a near-duplicate sitting in the list is not.
+     */
     const existing = await db.organization.findFirst({
-      where: {
-        deletedAt: null,
-        OR: [...(dKey ? [{ domainKey: dKey }] : []), { nameKey: nKey }],
-      },
+      where: { deletedAt: null, nameKey: nKey },
     });
+
+    const domainSibling =
+      !existing && dKey
+        ? await db.organization.findFirst({
+            where: { deletedAt: null, domainKey: dKey },
+            select: { legalName: true },
+          })
+        : null;
 
     const provenance =
       `${edition}, page ${entry.page}. Source: ${SOURCE_URL}.` +
@@ -398,6 +419,9 @@ export async function importUmaDirectory(
 
     const notes = [
       provenance,
+      domainSibling
+        ? `Shares the website ${entry.website} with "${domainSibling.legalName}", already recorded. The directory lists them separately; confirm whether they are one business before contacting both.`
+        : '',
       entry.productsServices ? `Products/services (as published): ${entry.productsServices}` : '',
       entry.brands ? `Brands: ${entry.brands}` : '',
       entry.address ? `Address: ${entry.address}` : '',
