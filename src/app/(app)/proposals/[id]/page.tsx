@@ -15,6 +15,7 @@ import {
   money,
 } from '@/components/ui';
 import { ProposalEditor } from '@/components/proposal-editor';
+import { SendProposalAction } from '@/components/send-proposal-action';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +91,13 @@ export default async function ProposalDetail({ params }: { params: Promise<{ id:
             >
               {proposal.status.replace(/_/g, ' ')}
             </Badge>
+            {proposal.status === 'approved' && can(user.role, 'email.draft') && (
+              <SendProposalAction
+                organizationId={proposal.organization.id}
+                proposalId={proposal.id}
+                reportId={proposal.report?.id ?? null}
+              />
+            )}
             <Link
               href={`/proposals/${proposal.id}/canvas`}
               className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-[13px] font-semibold text-amber-900 hover:bg-amber-100"
