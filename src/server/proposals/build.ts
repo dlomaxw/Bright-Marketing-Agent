@@ -5,6 +5,7 @@ import { logActivity } from '@/server/activity';
 import { getSetting } from '@/server/settings';
 import { recommendAiServices, recommendPlatform } from './platform-recommendation';
 import type { Confidence, Severity } from '@/lib/enums';
+import { isClientEligible } from '@/lib/enums';
 
 /**
  * Proposal generation.
@@ -49,7 +50,7 @@ export async function generateProposal(
   // Only verified, client-visible findings may justify a proposal line.
   const justifying = report
     ? report.findings.filter((rf) => rf.included).map((rf) => rf.finding)
-    : org.findings.filter((f) => f.verificationStatus === 'manually_verified' && f.clientVisible);
+    : org.findings.filter((f) => isClientEligible(f.verificationStatus) && f.clientVisible);
 
   if (justifying.length === 0) {
     throw new AppError(

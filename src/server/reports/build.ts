@@ -5,7 +5,7 @@ import { getSetting } from '@/server/settings';
 import { logActivity } from '@/server/activity';
 import { modelProvider } from '@/ai/provider';
 import type { FindingProjection } from '@/ai/contract';
-import { SEVERITY_WEIGHT, type Severity } from '@/lib/enums';
+import { SEVERITY_WEIGHT, type Severity, isClientEligible } from '@/lib/enums';
 
 /**
  * Report generation.
@@ -71,7 +71,7 @@ export async function generateReport(options: BuildOptions): Promise<{ id: strin
 
   const eligible = org.findings.filter(
     (f) =>
-      f.verificationStatus === 'manually_verified' &&
+      isClientEligible(f.verificationStatus) &&
       f.clientVisible &&
       f.observedAt >= staleBefore &&
       !f.requiresReverification,
@@ -83,7 +83,7 @@ export async function generateReport(options: BuildOptions): Promise<{ id: strin
       finding: f,
       reason: !f.clientVisible
         ? 'Not marked as client-facing'
-        : f.verificationStatus !== 'manually_verified'
+        : !isClientEligible(f.verificationStatus)
           ? `Verification status is "${f.verificationStatus}"`
           : f.requiresReverification
             ? 'Imported - requires re-verification'

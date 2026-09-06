@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { CLIENT_ELIGIBLE_STATUSES } from '@/lib/enums';
 import { AppError } from '@/lib/api';
 import { logActivity } from '@/server/activity';
 import { getSetting } from '@/server/settings';
@@ -55,7 +56,7 @@ export async function createEmailDraft(args: {
   const candidateWhere = {
     organizationId: org.id,
     deletedAt: null,
-    verificationStatus: 'manually_verified',
+    verificationStatus: { in: [...CLIENT_ELIGIBLE_STATUSES] },
     clientVisible: true,
     observedAt: { gte: staleBefore },
     ...(args.findingIds?.length ? { id: { in: args.findingIds } } : {}),

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { getSetting } from '@/server/settings';
-import { OPEN_STAGES, STAGE_LABELS, type PipelineStage } from '@/lib/enums';
+import { OPEN_STAGES, STAGE_LABELS, type PipelineStage, isClientEligible } from '@/lib/enums';
 
 /**
  * Agent memory.
@@ -195,7 +195,7 @@ export async function agentClientSummary(organizationId: string): Promise<AgentC
     confidenceScore: org.confidenceScore,
     relationshipRisk: org.relationshipRisk,
     findingsTotal: org.findings.length,
-    findingsVerified: org.findings.filter((f) => f.verificationStatus === 'manually_verified').length,
+    findingsVerified: org.findings.filter((f) => isClientEligible(f.verificationStatus)).length,
     findingsClientFacing: org.findings.filter((f) => f.clientVisible).length,
     contactsTotal: org.contacts.length,
     contactsVerified: org.contacts.filter((c) => c.verificationStatus === 'verified').length,
@@ -234,7 +234,7 @@ export async function agentAllClients(limit = 200): Promise<AgentClientSummary[]
     confidenceScore: org.confidenceScore,
     relationshipRisk: org.relationshipRisk,
     findingsTotal: org.findings.length,
-    findingsVerified: org.findings.filter((f) => f.verificationStatus === 'manually_verified').length,
+    findingsVerified: org.findings.filter((f) => isClientEligible(f.verificationStatus)).length,
     findingsClientFacing: org.findings.filter((f) => f.clientVisible).length,
     contactsTotal: org.contacts.length,
     contactsVerified: org.contacts.filter((c) => c.verificationStatus === 'verified').length,
@@ -375,7 +375,7 @@ export async function agentPitchCandidates(limit = 10): Promise<PitchCandidate[]
   for (const org of orgs) {
     const usable = org.findings.filter(
       (f) =>
-        f.verificationStatus === 'manually_verified' &&
+        isClientEligible(f.verificationStatus) &&
         f.clientVisible &&
         !f.requiresReverification &&
         f.observedAt >= staleBefore,
@@ -392,7 +392,7 @@ export async function agentPitchCandidates(limit = 10): Promise<PitchCandidate[]
 
     if (usable.length === 0) {
       const verifiedButStale = org.findings.filter(
-        (f) => f.verificationStatus === 'manually_verified' && f.observedAt < staleBefore,
+        (f) => isClientEligible(f.verificationStatus) && f.observedAt < staleBefore,
       ).length;
       const unreviewed = org.findings.filter((f) =>
         ['auto_detected', 'needs_review'].includes(f.verificationStatus),
