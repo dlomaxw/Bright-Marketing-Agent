@@ -79,7 +79,24 @@ export async function runReviewAgent(options: ReviewAgentOptions): Promise<Revie
     orderBy: { createdAt: 'asc' },
     take: options.limit ?? 200,
     include: {
+      /**
+       * Evidence hangs off the observation, not the finding — the crawler
+       * records what it saw, and the classifier turns that into a finding
+       * afterwards. Screenshots attach to the finding directly. Reading only
+       * one of the two would judge a well-evidenced finding as having none,
+       * which is exactly how a reviewer becomes a rubber stamp in reverse:
+       * rejecting everything until someone switches it off.
+       */
       evidence: { select: { id: true, sourceUrl: true, capturedAt: true, kind: true } },
+      observation: {
+        select: {
+          url: true,
+          outcome: true,
+          observedAt: true,
+          source: true,
+          evidence: { select: { id: true, sourceUrl: true, capturedAt: true, kind: true } },
+        },
+      },
     },
   });
 
@@ -105,7 +122,12 @@ export async function runReviewAgent(options: ReviewAgentOptions): Promise<Revie
     }
     result.examined += 1;
 
-    const reason = rejectionReason(finding, rulesByCode, staleBefore);
+    const evidence = [...finding.evidence, ...(finding.observation?.evidence ?? [])];
+    const reason = rejectionReason(
+      { ...finding, evidence, observation: finding.observation },
+      rulesByCode,
+      staleBefore,
+    );
 
     if (reason) {
       await db.finding.update({
@@ -180,6 +202,12 @@ type Candidate = {
   recommendation: string | null;
   observedAt: Date | null;
   evidence: { id: string; sourceUrl: string | null; capturedAt: Date | null; kind: string }[];
+  observation: {
+    url: string | null;
+    outcome: string;
+    observedAt: Date;
+    source: string;
+  } | null;
 };
 
 /**
@@ -204,24 +232,46 @@ export function rejectionReason(
     return 'Confidence is low. Where the detector itself is unsure, a second automated opinion adds nothing — a person should look.';
   }
 
-  if (finding.evidence.length === 0) {
-    return 'No evidence is attached. A claim about someone’s website needs the record of observing it.';
+  /**
+   * Provenance can come from either place, and both are real records.
+   *
+   * Some checks capture an artifact — a response body, a header, a screenshot —
+   * and that becomes an Evidence row. Others are about an absence: robots.txt
+   * is missing, no telephone link exists. There is no blob to store for a thing
+   * that is not there, and the record of looking is the Observation itself,
+   * which carries the URL, the outcome and the time.
+   *
+   * Demanding an Evidence row for every finding rejected 46 of 60 real
+   * findings on a first pass — a reviewer that refuses everything is as
+   * useless as one that approves everything, and gets switched off just as
+   * fast. What must be true is that SOMETHING recorded where and when we
+   * looked.
+   */
+  const observation = finding.observation;
+
+  const urls = [
+    ...finding.evidence.map((e) => e.sourceUrl),
+    observation?.url ?? null,
+  ].filter((u): u is string => !!u && u.trim().length > 0);
+
+  if (urls.length === 0) {
+    return 'Nothing records the URL this was observed at, so the finding cannot be pointed at anything.';
   }
 
-  const located = finding.evidence.some((e) => e.sourceUrl && e.sourceUrl.trim().length > 0);
-  if (!located) {
-    return 'No evidence records the exact URL it came from, so the finding cannot be pointed at anything.';
+  if (observation && observation.outcome !== 'issue') {
+    return `The underlying observation is "${observation.outcome}", not "issue". Only an observed problem can become a claim.`;
   }
 
-  const timestamped = finding.evidence.some((e) => e.capturedAt !== null);
-  if (!timestamped) {
-    return 'No evidence carries a capture time, so there is no way to say when this was true.';
+  const timestamps = [
+    ...finding.evidence.map((e) => e.capturedAt),
+    observation?.observedAt ?? null,
+  ].filter((d): d is Date => d !== null);
+
+  if (timestamps.length === 0) {
+    return 'Nothing carries a capture time, so there is no way to say when this was true.';
   }
 
-  const freshest = finding.evidence
-    .map((e) => e.capturedAt)
-    .filter((d): d is Date => d !== null)
-    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const freshest = timestamps.sort((a, b) => b.getTime() - a.getTime())[0];
   if (freshest && freshest < staleBefore) {
     return `The newest evidence is from ${freshest.toISOString().slice(0, 10)}. The site may have changed since, and a claim that is out of date is wrong in writing.`;
   }
