@@ -8,6 +8,7 @@ import { generateReport } from '@/server/reports/build';
 import { generateProposal } from '@/server/proposals/build';
 import { purgeExpiredSessions } from '@/server/auth/session';
 import { logActivity } from '@/server/activity';
+import { env } from '@/lib/env';
 
 /**
  * The scheduled agent: research, audit and draft preparation, unattended.
@@ -458,7 +459,16 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
   // Marking it `outdated` removes it from client-facing use and puts it back in
   // the queue for a fresh look, rather than letting a stale claim go out.
   if (hasTime(25_000)) {
-    const freshnessHours = Number(process.env.EVIDENCE_FRESHNESS_HOURS ?? 168);
+    /**
+     * Read through the validated env module, never process.env directly.
+     *
+     * `Number(process.env.X ?? 168)` looks safe and is not: `??` fires only on
+     * null and undefined, so an empty string — which is what a host passes for
+     * an unset variable — becomes Number('') = 0, and the freshness window
+     * collapses to "older than right now". That retired 213 findings created
+     * the same day on the first production run.
+     */
+    const freshnessHours = env.EVIDENCE_FRESHNESS_HOURS;
     const staleBefore = new Date(Date.now() - freshnessHours * 3_600_000);
     const stale = await db.finding.updateMany({
       where: {

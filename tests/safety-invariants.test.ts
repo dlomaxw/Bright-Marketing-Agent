@@ -41,6 +41,11 @@ const files = walk(SRC).map((file) => ({
  * the file as a whole cannot tell those apart, so we match the write blocks
  * only, by scanning for balanced braces.
  */
+/** Comments discuss process.env freely; only real reads matter. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+}
+
 function dataBlocks(source: string): string[] {
   const blocks: string[] = [];
   const marker = /\bdata:\s*\{/g;
@@ -322,5 +327,29 @@ describe('screenshots', () => {
     expect(capture!.source).toMatch(/browser-rendering/);
     expect(capture!.source).toMatch(/kind: 'screenshot'/);
     expect(capture!.source).toMatch(/sha256/);
+  });
+});
+
+describe('configuration reads', () => {
+  /**
+   * `Number(process.env.X ?? fallback)` reads as safe and is not: `??` fires
+   * only on null and undefined, so an empty string — what a host passes for an
+   * unset variable — becomes Number('') = 0. In the daily agent that collapsed
+   * the evidence freshness window to "older than right now" and retired 213
+   * findings created the same day.
+   *
+   * src/lib/env.ts already strips blanks and applies defaults. Everything else
+   * reads from it.
+   */
+  it('server modules do not read process.env directly', () => {
+    const offenders = files
+      .filter((f) => f.path.startsWith('server/') || f.path.startsWith('audit/'))
+      .filter((f) => /(?<!\/\/[^\n]*)\bprocess\.env\.[A-Z_]+/.test(stripComments(f.source)))
+      .map((f) => f.path);
+
+    expect(
+      offenders,
+      `These read process.env directly instead of src/lib/env.ts:\n${offenders.join('\n')}`,
+    ).toEqual([]);
   });
 });
