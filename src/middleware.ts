@@ -10,11 +10,21 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 const PUBLIC_PATHS = ['/login', '/api/auth/login'];
 
+/**
+ * Scheduled endpoints are called by the host's scheduler, which has no session
+ * cookie — this gate would turn every scheduled run into a 401. They are not
+ * unprotected: each verifies a shared secret against CRON_SECRET and refuses
+ * outright when that is unset. Skipping the cookie check here moves the
+ * decision to the route, where it can be made correctly.
+ */
+const SECRET_AUTHENTICATED_PATHS = ['/api/cron'];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (
     PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    SECRET_AUTHENTICATED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico'
   ) {
