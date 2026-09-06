@@ -44,6 +44,9 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().int().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
+  /** Defaults to SMTP_HOST — the same mailbox, read rather than written. */
+  IMAP_HOST: z.string().optional(),
+  IMAP_PORT: z.coerce.number().int().optional(),
 
   // Spaceship manages domains and DNS. It CANNOT send email — sending goes over
   // SMTP to Spacemail. Both key and secret are required by their API.

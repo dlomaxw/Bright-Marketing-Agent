@@ -1,5 +1,7 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { env } from '@/lib/env';
+import { randomUUID } from 'node:crypto';
+import { appendToSentFolder, buildRfc822 } from './sent-folder';
 
 /**
  * SMTP delivery.
@@ -161,7 +163,19 @@ export async function deliverBySmtp(message: OutgoingMessage): Promise<string> {
     );
   }
 
+  /**
+   * The identity is fixed here rather than left to the transport, so the copy
+   * filed in Sent carries the same Message-ID and Date as the message that
+   * actually went out. A copy with a different Message-ID would not thread
+   * with the reply, which defeats the point of having it.
+   */
+  const sentAt = new Date();
+  const messageId = `<${randomUUID()}@${env.EMAIL_FROM_ADDRESS.split('@')[1] ?? 'localhost'}>`;
+  const unsubscribeHeader = `<mailto:${env.EMAIL_FROM_ADDRESS}?subject=unsubscribe>`;
+
   const info = await getTransporter().sendMail({
+    messageId,
+    date: sentAt,
     from: { name: message.fromName, address: env.EMAIL_FROM_ADDRESS },
     to: message.toName ? { name: message.toName, address: message.to } : message.to,
     replyTo: message.replyTo ?? message.from,
@@ -184,14 +198,58 @@ export async function deliverBySmtp(message: OutgoingMessage): Promise<string> {
        * That is worth building once the application is deployed; promising
        * one-click without it would be worse than not offering it.
        */
-      'List-Unsubscribe': `<mailto:${env.EMAIL_FROM_ADDRESS}?subject=unsubscribe>`,
+      'List-Unsubscribe': unsubscribeHeader,
     },
   });
 
   if (info.rejected?.length) {
     throw new Error(`The server rejected the recipient: ${info.rejected.join(', ')}`);
   }
-  return info.messageId ?? `smtp-${Date.now()}`;
+
+  /**
+   * File a copy in the mailbox's Sent folder.
+   *
+   * SMTP does not do this: it hands the message to a server and never touches
+   * the sender's mailbox. Without this step a message sent by the application
+   * is invisible in Spacemail — the recipient has it and the sender has no
+   * record — which is a bad place to be when the client replies.
+   *
+   * Deliberately after the rejection check and deliberately unable to throw.
+   * The message has already been accepted for delivery; reporting it as failed
+   * because a copy did not file would be a worse lie than a missing copy, and
+   * the outbox and activity log hold the record regardless.
+   */
+  try {
+    const copy = await appendToSentFolder(
+      buildRfc822({
+        from: env.EMAIL_FROM_ADDRESS,
+        fromName: message.fromName,
+        to: message.to,
+        toName: message.toName,
+        replyTo: message.replyTo ?? message.from,
+        subject: message.subject,
+        body: message.body,
+        messageId,
+        date: sentAt,
+        headers: { 'List-Unsubscribe': unsubscribeHeader },
+      }),
+    );
+    if (!copy.ok) {
+      console.warn(
+        JSON.stringify({ level: 'warn', event: 'email.sent_copy_failed', reason: copy.reason }),
+      );
+    }
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'email.sent_copy_failed',
+        reason: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  return info.messageId ?? messageId;
 }
 
 /** Drops the cached transporter. Used after a configuration change. */
