@@ -174,3 +174,26 @@ body {
     background: #fff;
   }
 }
+
+
+/*
+ * Rendered proposal copy in the canvas view.
+ *
+ * The proposal body fields hold markdown. They were printed raw, so a
+ * client-facing page showed "## Replace the third-party platform" with the
+ * hashes visible.
+ */
+.proposal-prose h2,
+.proposal-prose h3 {
+  font-weight: 700;
+  color: #0F172A;
+  margin: 1rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+.proposal-prose p { margin: 0 0 0.65rem; }
+.proposal-prose ul { list-style: disc; margin: 0 0 0.65rem 1.1rem; }
+.proposal-prose ol { list-style: decimal; margin: 0 0 0.65rem 1.1rem; }
+.proposal-prose li { margin-bottom: 0.25rem; }
+.proposal-prose strong { color: #0F172A; font-weight: 600; }
+.proposal-prose em { color: #64748B; font-style: italic; }
+.proposal-prose a { color: #1E3A8A; text-decoration: underline; }
