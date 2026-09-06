@@ -5,6 +5,7 @@ import { requirePagePermission } from '@/server/auth/guard';
 import { parseStringArray } from '@/lib/json';
 import { PHASE_LABELS } from '@/lib/enums';
 import { BRAND } from '@/config/brand';
+import { renderMarkdown } from '@/lib/markdown-preview';
 import { money, formatDate } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,7 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
   if (!proposal || proposal.deletedAt) notFound();
 
   const orgName = proposal.organization.brandName ?? proposal.organization.legalName;
+  const priceOnDiscussion = proposal.pricingBasis !== 'fixed';
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4 print:bg-white print:p-0">
@@ -57,13 +59,32 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
       {/* Canvas Printable Proposal Document */}
       <article className="mx-auto max-w-4xl rounded-2xl bg-white p-12 shadow-xl border border-slate-200 print:shadow-none print:border-none print:p-0">
         {/* Document Header */}
-        <header className="border-b border-slate-200 pb-8">
+        <header className="border-b-4 pb-8" style={{ borderColor: BRAND.gold }}>
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
-                {BRAND.companyName}
-              </span>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+              {/*
+                The mark itself, not the company name set in a colour. A client
+                recognises the logo before they read anything, and this view is
+                what gets shown on a screen in a meeting.
+              */}
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={BRAND.logoPath}
+                  alt={BRAND.companyName}
+                  className="h-12 w-auto"
+                />
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: BRAND.goldDark }}
+                >
+                  {BRAND.companyName}
+                </span>
+              </div>
+              <h1
+                className="mt-3 text-3xl font-bold tracking-tight"
+                style={{ color: BRAND.navy }}
+              >
                 Commercial Proposal
               </h1>
               <p className="mt-1 text-lg font-medium text-slate-600">{proposal.title}</p>
@@ -91,8 +112,18 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
             </div>
             <div>
               <p className="font-bold uppercase tracking-wider text-slate-400">Prepared By</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{BRAND.companyName}</p>
-              <p className="text-slate-500">Marketing Audit & Digital Advisory Team</p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: BRAND.navy }}>
+                {BRAND.companyName}
+              </p>
+              {/*
+                The details a reader needs to reply, rather than a department
+                name. "Marketing Audit & Digital Advisory Team" described no
+                team that exists.
+              */}
+              <p className="text-slate-500">{BRAND.address}</p>
+              <p className="text-slate-500">{BRAND.phones.join(' · ')}</p>
+              <p className="text-slate-500">{BRAND.email}</p>
+              <p className="text-slate-500">{BRAND.websites.join(' · ')}</p>
             </div>
           </div>
         </header>
@@ -101,34 +132,34 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
         <div className="mt-8 space-y-8 text-sm text-slate-700 leading-relaxed">
           {proposal.situation && (
             <section>
-              <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">
+              <h2 className="text-lg font-bold border-b-2 pb-2 mb-3" style={{ color: BRAND.navy, borderColor: BRAND.gold }}>
                 1. Client Situation & Opportunity
               </h2>
-              <p className="whitespace-pre-wrap">{proposal.situation}</p>
+              <div className="proposal-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(proposal.situation) }} />
             </section>
           )}
 
           {proposal.objectives && (
             <section>
-              <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">
+              <h2 className="text-lg font-bold border-b-2 pb-2 mb-3" style={{ color: BRAND.navy, borderColor: BRAND.gold }}>
                 2. Strategic Objectives
               </h2>
-              <p className="whitespace-pre-wrap">{proposal.objectives}</p>
+              <div className="proposal-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(proposal.objectives) }} />
             </section>
           )}
 
           {proposal.solution && (
             <section>
-              <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">
+              <h2 className="text-lg font-bold border-b-2 pb-2 mb-3" style={{ color: BRAND.navy, borderColor: BRAND.gold }}>
                 3. Recommended Solution
               </h2>
-              <p className="whitespace-pre-wrap">{proposal.solution}</p>
+              <div className="proposal-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(proposal.solution) }} />
             </section>
           )}
 
           {proposal.items.length > 0 && (
             <section>
-              <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2 mb-4">
+              <h2 className="text-lg font-bold border-b-2 pb-2 mb-4" style={{ color: BRAND.navy, borderColor: BRAND.gold }}>
                 4. Scope of Deliverables & Services
               </h2>
               <div className="space-y-4">
@@ -159,66 +190,105 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
             </section>
           )}
 
-          {/* Investment Schedule Table */}
+          {/*
+            Investment. With price-on-discussion the work is still itemised —
+            the client sees exactly what is proposed — but no figures appear.
+            A table of "UGX 0" against every line reads as a quotation with
+            mistakes in it, and a client could reasonably ask to be held to it.
+          */}
           <section>
-            <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2 mb-4">
-              5. Commercial Investment Breakdown
+            <h2
+              className="text-lg font-bold border-b-2 pb-2 mb-4"
+              style={{ color: BRAND.navy, borderColor: BRAND.gold }}
+            >
+              5. {priceOnDiscussion ? 'Scope of Investment' : 'Commercial Investment Breakdown'}
             </h2>
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+                <thead
+                  className="font-bold uppercase tracking-wider text-white"
+                  style={{ backgroundColor: BRAND.navy }}
+                >
                   <tr>
                     <th className="p-3">Service Module</th>
                     <th className="p-3">Phase</th>
                     <th className="p-3 text-center">Qty</th>
-                    <th className="p-3 text-right">Unit Fee</th>
-                    <th className="p-3 text-right">Total</th>
+                    {!priceOnDiscussion && <th className="p-3 text-right">Unit Fee</th>}
+                    {!priceOnDiscussion && <th className="p-3 text-right">Total</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {proposal.items.map((item) => (
                     <tr key={item.id}>
-                      <td className="p-3 font-semibold text-slate-900">{item.name}</td>
+                      <td className="p-3 font-semibold" style={{ color: BRAND.navy }}>{item.name}</td>
                       <td className="p-3 text-slate-500">{PHASE_LABELS[item.phase] ?? item.phase}</td>
-                      <td className="p-3 text-center font-medium">{item.quantity}</td>
-                      <td className="p-3 text-right font-medium">{money(item.unitFee, proposal.currency)}</td>
-                      <td className="p-3 text-right font-semibold text-slate-900">{money(item.lineTotal, proposal.currency)}</td>
+                      <td className="p-3 text-center text-slate-500">{item.quantity}</td>
+                      {!priceOnDiscussion && (
+                        <td className="p-3 text-right font-medium">{money(item.unitFee, proposal.currency)}</td>
+                      )}
+                      {!priceOnDiscussion && (
+                        <td className="p-3 text-right font-semibold text-slate-900">
+                          {money(item.lineTotal, proposal.currency)}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-300">
-                  <tr>
-                    <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-slate-600">Subtotal</td>
-                    <td className="p-3 text-right text-slate-900">{money(proposal.subtotal, proposal.currency)}</td>
-                  </tr>
-                  {proposal.discount > 0 && (
-                    <tr className="text-amber-700">
-                      <td colSpan={4} className="p-3 text-right uppercase tracking-wider">Discount</td>
-                      <td className="p-3 text-right">-{money(proposal.discount, proposal.currency)}</td>
-                    </tr>
-                  )}
-                  {proposal.taxRate > 0 && (
+                {!priceOnDiscussion && (
+                  <tfoot className="bg-slate-50 font-bold text-xs">
                     <tr>
-                      <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-slate-600">
-                        Tax ({Math.round(proposal.taxRate * 100)}%)
-                      </td>
-                      <td className="p-3 text-right text-slate-900">{money(proposal.taxAmount, proposal.currency)}</td>
+                      <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-slate-600">Subtotal</td>
+                      <td className="p-3 text-right text-slate-900">{money(proposal.subtotal, proposal.currency)}</td>
                     </tr>
-                  )}
-                  <tr className="text-base text-slate-900 bg-slate-100">
-                    <td colSpan={4} className="p-3 text-right uppercase tracking-wider">Grand Total</td>
-                    <td className="p-3 text-right text-blue-700 font-extrabold">{money(proposal.total, proposal.currency)}</td>
-                  </tr>
-                </tfoot>
+                    {proposal.discount > 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-slate-600">Discount</td>
+                        <td className="p-3 text-right">-{money(proposal.discount, proposal.currency)}</td>
+                      </tr>
+                    )}
+                    {proposal.taxRate > 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-slate-600">
+                          Tax ({Math.round(proposal.taxRate * 100)}%)
+                        </td>
+                        <td className="p-3 text-right text-slate-900">{money(proposal.taxAmount, proposal.currency)}</td>
+                      </tr>
+                    )}
+                    <tr style={{ backgroundColor: BRAND.gold }}>
+                      <td colSpan={4} className="p-3 text-right uppercase tracking-wider" style={{ color: BRAND.navy }}>
+                        Total Investment
+                      </td>
+                      <td className="p-3 text-right font-extrabold" style={{ color: BRAND.navy }}>
+                        {money(proposal.total, proposal.currency)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
+            {priceOnDiscussion && (
+              <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                Fees are agreed against the scope above rather than quoted from a list.{' '}
+                {BRAND.companyName} will confirm the investment for each phase once the scope,
+                timing and priorities are settled with you — so you pay for the work you actually
+                want, in the order you want it.{' '}
+                <strong>This document is a scope of work, not a quotation.</strong>
+              </p>
+            )}
           </section>
 
-          {/* Terms & Signatures */}
           <section className="pt-4 border-t border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900 mb-3">6. Acceptance & Approval</h2>
+            <h2 className="text-lg font-bold mb-3" style={{ color: BRAND.navy }}>6. Acceptance & Approval</h2>
+            {/*
+              Wording follows the pricing basis. Saying a client accepts a
+              "commercial investment specified in this proposal" is wrong when
+              the proposal deliberately specifies none, and a signature block
+              that misdescribes what is being agreed is worse than none.
+            */}
             <p className="text-xs text-slate-500 mb-6">
-              By signing below, the client accepts the terms, scope, and commercial investment specified in this proposal.
+              {proposal.pricingBasis === 'fixed'
+                ? 'By signing below, the client accepts the terms, scope, and commercial investment specified in this proposal.'
+                : 'By signing below, the client accepts the scope of work set out above. Fees are agreed separately against that scope; this document is not a quotation.'}
             </p>
             <div className="grid grid-cols-2 gap-8 pt-4">
               <div className="border-t border-slate-300 pt-3 text-xs">
@@ -235,6 +305,34 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
               </div>
             </div>
           </section>
+
+          {/*
+            The document closes the way it opened. A proposal is read, put
+            down, and picked up again by whoever has to reply to it, and the
+            reply details should not live only on page one.
+          */}
+          <footer
+            className="mt-8 flex items-center justify-between gap-6 rounded-xl px-5 py-4 text-xs"
+            style={{ backgroundColor: BRAND.navy, color: '#E2E8F0' }}
+          >
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={BRAND.logoPath} alt={BRAND.companyName} className="h-9 w-auto" />
+              <div>
+                <p className="font-semibold" style={{ color: BRAND.gold }}>
+                  {BRAND.companyName}
+                </p>
+                <p className="opacity-80">{BRAND.tagline}</p>
+              </div>
+            </div>
+            <div className="text-right leading-relaxed opacity-90">
+              <p>{BRAND.address}</p>
+              <p>{BRAND.phones.join(' · ')}</p>
+              <p>
+                {BRAND.email} · {BRAND.websites.join(' · ')}
+              </p>
+            </div>
+          </footer>
         </div>
       </article>
     </div>
