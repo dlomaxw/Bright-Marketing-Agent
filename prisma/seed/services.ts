@@ -9,6 +9,13 @@
  * `triggerCategories` / `triggerCheckCodes` implement the finding-to-service
  * mapping in section 10 of the documentation, and are what makes every proposal
  * line traceable to the evidence that justifies it.
+ *
+ * Several modules deliberately carry no triggers. A website audit cannot
+ * produce evidence that a developer needs an architectural render, so those
+ * services are added to a proposal by a person who knows the client, rather
+ * than attached automatically. Wiring a trigger that does not follow from the
+ * evidence would make a recommendation look earned when it was not — which is
+ * the one thing this catalogue exists to prevent.
  */
 export interface ServiceSeed {
   code: string;
@@ -455,5 +462,115 @@ export const SERVICE_MODULES: ServiceSeed[] = [
     triggerCategories: [],
     triggerCheckCodes: ['gbp.no_description', 'gbp.few_photos', 'gbp.no_hours'],
     sortOrder: 183,
+  },
+  {
+    code: 'brand_development',
+    name: 'Brand development',
+    family: 'Brand',
+    summary:
+      'Brand strategy, visual identity and consistency guidelines, for a new launch or an existing brand that has drifted.',
+    deliverables: [
+      'Brand strategy: positioning, voice and audience definition',
+      'Visual identity: logo system, colour, type and layout rules',
+      'Brand story developed to carry across every touchpoint',
+      'Consistency guidelines so the brand holds up on every platform',
+      'Application to website, social profiles and print',
+    ],
+    defaultPhase: 'phase_2',
+    /**
+     * Triggered where the audit found the public presence saying different
+     * things in different places — a social profile standing in for a website,
+     * or profiles that never make clear what the business sells.
+     */
+    triggerCategories: [],
+    triggerCheckCodes: ['gbp.social_as_website', 'social.services_unclear'],
+    sortOrder: 190,
+  },
+  {
+    code: 'design_animation_motion',
+    name: 'Design, animation and motion',
+    family: 'Creative',
+    summary:
+      'Graphic design and short-form animation: the visual and motion assets that carry a campaign.',
+    deliverables: [
+      'Graphic design and concept development for campaigns and launches',
+      'Short video animations, up to three minutes, for feed and story formats',
+      'Explainer and product-motion pieces',
+      'A consistent visual language carried across every asset',
+    ],
+    defaultPhase: 'phase_2',
+    triggerCategories: [],
+    triggerCheckCodes: [],
+    sortOrder: 191,
+  },
+  {
+    code: 'visual_media_production',
+    name: 'Visual media production',
+    family: 'Creative',
+    summary:
+      'Professional photography and video for brand, product and property — storytelling-led direction, not just coverage.',
+    deliverables: [
+      'Professional stills for brand, product and property',
+      'Video production, from social clips to longer-form content',
+      'Storytelling-led direction and shot planning',
+      'Edited assets sized for each platform',
+    ],
+    defaultPhase: 'phase_2',
+    triggerCategories: [],
+    triggerCheckCodes: [],
+    sortOrder: 192,
+  },
+  {
+    code: 'real_estate_visualization',
+    name: 'Real estate visualization',
+    family: 'Property',
+    summary:
+      'Architectural renders, walkthrough animation and interior visualization, so buyers can experience an off-plan property before it is built.',
+    deliverables: [
+      'Photorealistic exterior and interior renders',
+      'Walkthrough and flythrough animation',
+      'Master-plan and site-scale visualizations',
+      'Paired with photography and virtual tours for a consistent listing story',
+    ],
+    defaultPhase: 'phase_2',
+    triggerCategories: [],
+    triggerCheckCodes: [],
+    sortOrder: 193,
+  },
+  {
+    code: 'architecture_interior_design',
+    name: 'Architecture and interior design',
+    family: 'Property',
+    summary:
+      'Layout and finish resolved before construction: floor plans, space planning and material concepts.',
+    deliverables: [
+      'Floor plan development and space planning',
+      'Material and finish concept boards',
+      'Staged interior renders matched to real furnishing options',
+      'Coordination with construction and development teams',
+    ],
+    defaultPhase: 'phase_2',
+    triggerCategories: [],
+    triggerCheckCodes: [],
+    sortOrder: 194,
+  },
+  {
+    code: 'property_marketing_management',
+    name: 'Property marketing and management',
+    family: 'Property',
+    summary:
+      'The Bright Properties arm: listing, promotion and management for apartments, villas and land across Kampala.',
+    deliverables: [
+      'Property listings and promotion across multiple platforms',
+      'Professional photography, videography and virtual tours',
+      'Social media marketing on Instagram, Facebook and TikTok',
+      'Email campaigns and search visibility for lead generation',
+      '360-degree virtual tours and drone photography',
+      'Legal due diligence and structured payment-plan guidance',
+    ],
+    defaultPhase: 'phase_2',
+    triggerCategories: [],
+    triggerCheckCodes: [],
+    sortOrder: 195,
   },
 ];
