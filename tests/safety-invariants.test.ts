@@ -69,7 +69,13 @@ describe('verification gate', () => {
    * the findings endpoint, which checks the `finding.verify` permission and
    * records the reviewer. Nothing else may do it.
    */
-  const ALLOWED_TO_VERIFY = ['app/api/findings/[id]/route.ts'];
+  const ALLOWED_TO_VERIFY = [
+    'app/api/findings/[id]/route.ts',
+    // Bulk approval for one organization. Same `finding.verify` permission,
+    // same reviewer recorded on every row — it removes the clicking, not the
+    // accountability. Reachable only from a session, never by the agent.
+    'app/api/organizations/[id]/findings/verify/route.ts',
+  ];
 
   it('only the findings endpoint sets manually_verified', () => {
     const offenders = files
@@ -87,7 +93,13 @@ describe('verification gate', () => {
    * `clientVisible: true` is what puts a claim in front of a client. It may only
    * be set where a human explicitly asked for it.
    */
-  const ALLOWED_TO_PUBLISH = ['app/api/findings/[id]/route.ts'];
+  const ALLOWED_TO_PUBLISH = [
+    'app/api/findings/[id]/route.ts',
+    'app/api/organizations/[id]/findings/verify/route.ts',
+    // The review agent may publish, but only under `agent_verified` — asserted
+    // separately below. It must never write `manually_verified`.
+    'server/agent/review.ts',
+  ];
 
   it('only the findings endpoint marks a finding client-facing', () => {
     const offenders = files
@@ -270,5 +282,45 @@ describe('the scheduled agent', () => {
       expect(route!.source).toMatch(/CRON_SECRET/);
       expect(route!.source).toMatch(/401/);
     }
+  });
+});
+
+describe('the review agent', () => {
+  const review = () => files.find((f) => f.path === 'server/agent/review.ts');
+
+  it('exists', () => {
+    expect(review(), 'server/agent/review.ts is missing').toBeDefined();
+  });
+
+  /**
+   * The whole point of a separate status. A machine writing
+   * `manually_verified` makes the audit trail claim a person reviewed
+   * something no person saw — and that record is the defence if a client ever
+   * disputes a finding.
+   */
+  it('never claims a human verified anything', () => {
+    expect(
+      assignsInData(review()!.source, /verificationStatus:\s*['"]manually_verified['"]/),
+      'the review agent must not write manually_verified',
+    ).toBe(false);
+  });
+
+  it('refuses findings rather than only approving them', () => {
+    const source = review()!.source;
+    // A reviewer that cannot reject is a rubber stamp.
+    expect(source).toMatch(/needs_review/);
+    expect(source).toMatch(/rejectionReason/);
+  });
+});
+
+describe('screenshots', () => {
+  it('capture visits the real URL rather than drawing one', () => {
+    const capture = files.find((f) => f.path === 'audit/capture.ts');
+    expect(capture, 'audit/capture.ts is missing').toBeDefined();
+    // A drawing of a prospect's website presented as a screenshot of it is a
+    // fabricated observation, which is the one thing this product forbids.
+    expect(capture!.source).toMatch(/browser-rendering/);
+    expect(capture!.source).toMatch(/kind: 'screenshot'/);
+    expect(capture!.source).toMatch(/sha256/);
   });
 });

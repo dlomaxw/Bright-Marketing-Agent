@@ -184,6 +184,7 @@ export const CONFIDENCE_WEIGHT: Record<Confidence, number> = { high: 100, medium
 export const VERIFICATION_STATUSES = tuple([
   'auto_detected',
   'needs_review',
+  'agent_verified',
   'manually_verified',
   'dismissed',
   'fixed',
@@ -195,6 +196,7 @@ export const zVerificationStatus = z.enum(VERIFICATION_STATUSES);
 export const VERIFICATION_LABELS: Record<VerificationStatus, string> = {
   auto_detected: 'Automatically detected',
   needs_review: 'Needs manual review',
+  agent_verified: 'Checked by the review agent',
   manually_verified: 'Manually verified',
   dismissed: 'Dismissed',
   fixed: 'Fixed',
@@ -203,9 +205,21 @@ export const VERIFICATION_LABELS: Record<VerificationStatus, string> = {
 
 /**
  * The single gate for client-facing use. A finding may only appear in a report,
- * a proposal justification or an email if this returns true.
+ * a proposal justification or an email if it holds one of these.
+ *
+ * `agent_verified` is a separate value from `manually_verified` on purpose,
+ * rather than the review agent writing the latter. The two mean different
+ * things and the record has to say which happened: if a client disputes a
+ * finding, this trail is the answer, and one claiming a person reviewed
+ * something no person saw is worse than no record at all.
  */
-export const CLIENT_ELIGIBLE_STATUSES: VerificationStatus[] = ['manually_verified'];
+export const CLIENT_ELIGIBLE_STATUSES: VerificationStatus[] = [
+  'manually_verified',
+  'agent_verified',
+];
+
+export const isClientEligible = (status: string): boolean =>
+  (CLIENT_ELIGIBLE_STATUSES as string[]).includes(status);
 
 // --- Documents and outreach -------------------------------------------------
 
