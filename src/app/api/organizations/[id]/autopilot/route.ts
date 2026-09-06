@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { apiHandler, notFound, ok } from '@/lib/api';
 import { requirePermission } from '@/server/auth/guard';
-import { CHECK_GROUPS } from '@/lib/enums';
+import { CHECK_GROUPS, CLIENT_ELIGIBLE_STATUSES } from '@/lib/enums';
 import { createAuditRun, drainQueue } from '@/server/audit/runner';
 import { generateReport } from '@/server/reports/build';
 import { generateProposal } from '@/server/proposals/build';
@@ -42,14 +42,35 @@ export const POST = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     stepsExecuted.push('Ran deterministic website audit');
   }
 
-  // Step 2: STOP at the human verification gate.
+  // Step 2: the review agent checks each finding against its stored evidence.
   //
-  // This is deliberately where autopilot ends its automatic run. An earlier
-  // version marked every finding `manually_verified` + `clientVisible` here,
-  // which recorded machine output as human-reviewed, put unreviewed claims in
-  // front of clients, and bypassed the imported-data re-verification block.
-  // Automating this gate removes the only thing standing between an unchecked
-  // observation and a client-facing claim, so it is not automated.
+  // An earlier version simply marked every finding `manually_verified` +
+  // `clientVisible` here, which recorded machine output as human-reviewed and
+  // put unchecked observations in front of clients. The answer is not to leave
+  // the gate shut — thousands of findings cannot be cleared by hand, and a gate
+  // nobody can pass through is why nothing ships — but to have something
+  // actually do the checking.
+  //
+  // So findings are re-examined against their evidence, and anything the agent
+  // will not stand behind moves to `needs_review` with the reason recorded.
+  // What passes becomes `agent_verified`, never `manually_verified`: no person
+  // reviewed it, and the audit trail must not claim otherwise.
+  const { runReviewAgent } = await import('@/server/agent/review');
+  const review = await runReviewAgent({
+    organizationId: org.id,
+    actorId: user.id,
+    budgetMs: 60_000,
+  });
+
+  if (review.examined > 0) {
+    stepsExecuted.push(
+      `Review agent examined ${review.examined} finding(s): ${review.approved} approved, ${review.rejected} sent back for a person to look at.`,
+    );
+    for (const rejection of review.rejections.slice(0, 3)) {
+      stepsExecuted.push(`  ${rejection.reference}: ${rejection.reason}`);
+    }
+  }
+
   const unverified = await db.finding.count({
     where: {
       organizationId: org.id,
@@ -61,14 +82,14 @@ export const POST = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     where: {
       organizationId: org.id,
       deletedAt: null,
-      verificationStatus: 'manually_verified',
+      verificationStatus: { in: [...CLIENT_ELIGIBLE_STATUSES] },
       clientVisible: true,
     },
   });
 
   if (unverified > 0) {
     stepsExecuted.push(
-      `${unverified} finding(s) are waiting for human verification — autopilot does not verify findings.`,
+      `${unverified} finding(s) still need a person: the review agent would not approve them on the evidence recorded.`,
     );
   }
 

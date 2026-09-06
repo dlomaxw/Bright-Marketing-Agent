@@ -5,6 +5,7 @@ import { requirePermission } from '@/server/auth/guard';
 import { parseStringArray } from '@/lib/json';
 import { renderDocx } from '@/documents/docx';
 import { renderPdf } from '@/documents/pdf';
+import { loadFindingFigures } from '@/documents/figures';
 import { logActivity } from '@/server/activity';
 import { PHASE_LABELS } from '@/lib/enums';
 
@@ -80,6 +81,20 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     preparedBy: user.name,
     date: proposal.createdAt,
   };
+
+  /**
+   * The screenshots belong with "Client situation and verified opportunity" —
+   * the section that says what we observed. A proposal asks a business to
+   * spend money on the strength of that observation, so showing the page it
+   * was made about is the difference between an assertion and a case.
+   *
+   * Where nothing could be captured the section renders unchanged. Nothing is
+   * drawn to fill the space.
+   */
+  const figures = await loadFindingFigures(proposal.organizationId);
+  if (figures.length > 0 && sections[0]) {
+    (sections[0] as { figures?: typeof figures }).figures = figures;
+  }
 
   const buffer = format === 'docx' ? await renderDocx(meta, sections) : await renderPdf(meta, sections);
 

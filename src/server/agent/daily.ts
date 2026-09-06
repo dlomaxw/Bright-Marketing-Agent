@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { CHECK_GROUPS } from '@/lib/enums';
+import { CHECK_GROUPS, CLIENT_ELIGIBLE_STATUSES } from '@/lib/enums';
 import { createAuditRun, drainQueue } from '@/server/audit/runner';
 import { recomputeScores } from '@/server/scoring/recompute';
 import { buildResearchBrief } from '@/server/reports/research-brief';
@@ -21,10 +21,11 @@ import { logActivity } from '@/server/activity';
  *
  * What it deliberately does NOT do:
  *
- *   - It never marks a finding `manually_verified` or `clientVisible`. Those
- *     are the acts that turn machine output into a claim made to a business,
- *     and a person performs them. An earlier autopilot did this automatically;
- *     it was the most serious defect found in this codebase.
+ *   - It never marks a finding `manually_verified`. The review agent it calls
+ *     approves findings as `agent_verified`, a separate status, because no
+ *     person reviewed them and the audit trail must not say one did. An earlier
+ *     autopilot wrote `manually_verified` directly; it was the most serious
+ *     defect found in this codebase.
  *   - It never sends email. Reports and proposals are produced as drafts and
  *     wait for approval like any other.
  *
@@ -67,6 +68,8 @@ export interface DailyAgentResult {
     proposalsDrafted: number;
     jobsReclaimed: number;
     sessionsPurged: number;
+    findingsApproved: number;
+    findingsSentBack: number;
   };
   /** Work a person must do before anything can reach a client. */
   awaitingHumanReview: {
@@ -132,6 +135,8 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
     proposalsDrafted: 0,
     jobsReclaimed: 0,
     sessionsPurged: 0,
+    findingsApproved: 0,
+    findingsSentBack: 0,
   };
 
   // --- 1. Housekeeping ------------------------------------------------------
@@ -219,6 +224,27 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
     }
   }
 
+  // --- 4b. Review the findings the audits produced ---------------------------
+  // The review agent re-checks each finding against its stored evidence and
+  // approves only what that evidence supports. Everything else moves to
+  // needs_review with the reason recorded, so the human queue holds the cases
+  // that genuinely need judgement rather than all of them.
+  if (hasTime(45_000)) {
+    const { runReviewAgent } = await import('@/server/agent/review');
+    const review = await runReviewAgent({
+      actorId,
+      budgetMs: Math.min(60_000, Math.max(15_000, timeLeft() - 40_000)),
+      limit: 200,
+    });
+    counts.findingsApproved = review.approved;
+    counts.findingsSentBack = review.rejected;
+    if (review.examined > 0) {
+      steps.push(
+        `Review agent examined ${review.examined} finding(s): ${review.approved} approved on the evidence, ${review.rejected} sent back for a person.`,
+      );
+    }
+  }
+
   // --- 5. Internal research briefs ------------------------------------------
   // This is the part of "write it up" that can be automated honestly: it
   // summarises what was found and labels what has not been reviewed. It is an
@@ -255,7 +281,11 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
       where: {
         deletedAt: null,
         findings: {
-          some: { deletedAt: null, verificationStatus: 'manually_verified', clientVisible: true },
+          some: {
+            deletedAt: null,
+            verificationStatus: { in: [...CLIENT_ELIGIBLE_STATUSES] },
+            clientVisible: true,
+          },
         },
       },
       orderBy: { opportunityScore: 'desc' },

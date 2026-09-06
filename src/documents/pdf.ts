@@ -122,6 +122,27 @@ export async function renderPdf(meta: DocumentMeta, sections: DocumentSection[])
             doc.moveDown(0.5);
         }
       }
+
+      for (const figure of section.figures ?? []) {
+        try {
+          const imageWidth = PAGE_WIDTH - MARGIN * 2;
+          // 1280x800 captures keep a 5:8 ratio; the caption needs room below.
+          const imageHeight = Math.round((imageWidth * 800) / 1280);
+          if (doc.y + imageHeight + 40 > doc.page.height - MARGIN) doc.addPage();
+
+          doc.moveDown(0.6);
+          doc.image(figure.png, MARGIN, doc.y, { width: imageWidth });
+          doc.y += imageHeight + 6;
+          doc
+            .fontSize(8)
+            .fillColor('#6B7280')
+            .text(figure.caption, MARGIN, doc.y, { width: imageWidth });
+          doc.moveDown(0.8).fillColor('#111827');
+        } catch {
+          // A corrupt image must not fail the export. The finding's text stands
+          // on its own; the picture supports it, it does not carry it.
+        }
+      }
     }
 
     // --- Footers ------------------------------------------------------------

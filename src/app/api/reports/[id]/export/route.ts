@@ -4,6 +4,7 @@ import { apiHandler, badRequest, notFound } from '@/lib/api';
 import { requirePermission } from '@/server/auth/guard';
 import { renderDocx } from '@/documents/docx';
 import { renderPdf } from '@/documents/pdf';
+import { loadFindingFigures } from '@/documents/figures';
 import { logActivity } from '@/server/activity';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -38,6 +39,23 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   const sections = report.sections
     .filter((s) => s.included && s.key !== 'cover')
     .map((s) => ({ heading: s.heading, body: s.body }));
+
+  /**
+   * Screenshots go with the findings section, where the claims they support
+   * are made. Attaching them to the cover or an appendix would separate the
+   * picture from the sentence it evidences, which is most of its value.
+   *
+   * Where nothing was captured — a site that would not load, most often — the
+   * section renders exactly as before. Nothing is drawn to fill the gap.
+   */
+  const figures = await loadFindingFigures(report.organizationId);
+  if (figures.length > 0) {
+    const findingsSection =
+      sections.find((s) => /finding|observ|what we found/i.test(s.heading)) ?? sections[0];
+    if (findingsSection) {
+      (findingsSection as { figures?: typeof figures }).figures = figures;
+    }
+  }
 
   const buffer = format === 'docx' ? await renderDocx(meta, sections) : await renderPdf(meta, sections);
 

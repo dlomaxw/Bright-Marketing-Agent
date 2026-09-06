@@ -211,6 +211,33 @@ export async function processAuditJob(jobId: string): Promise<void> {
     });
     await markResolvedFindings(org.id, drafts);
 
+    /**
+     * One screenshot of the audited page, attached to the findings this run
+     * produced.
+     *
+     * Taken once per run rather than once per finding: it is another request
+     * to someone else's server, and the crawler's politeness rules do not stop
+     * applying because the request comes from a different function. Several
+     * findings about the same page share the one capture.
+     *
+     * A failure here is recorded as nothing at all — no picture, no
+     * substitute. A page that would not load is itself usually the finding.
+     */
+    const captureUrl = run.targetUrl ?? org.website;
+    if (captureUrl && classification.created > 0) {
+      const { captureScreenshot, captureConfigured } = await import('@/audit/capture');
+      if (captureConfigured()) {
+        const primary = await db.finding.findFirst({
+          where: { organizationId: org.id, auditRunId: run.id, deletedAt: null },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        if (primary) {
+          await captureScreenshot({ url: captureUrl, findingId: primary.id }).catch(() => undefined);
+        }
+      }
+    }
+
     // Social profiles the site links to are recorded automatically. The
     // business is telling us which accounts are theirs, on a page we already
     // fetched, so the URL is evidence rather than a guess — and it is what

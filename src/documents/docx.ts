@@ -18,9 +18,23 @@ import { parseBlocks, parseSpans, type Block } from './markdown';
 import { BRAND } from '@/config/brand';
 import { contactLine, contactLines, logoBuffer } from './brand-assets';
 
+/**
+ * An image included as evidence for something the section claims.
+ *
+ * `caption` carries the URL and capture time rather than a description,
+ * because that is what makes the picture evidence instead of decoration: a
+ * reader can go to that address and check. Nothing is drawn or simulated — a
+ * figure exists only where a real page was loaded and captured.
+ */
+export interface DocumentFigure {
+  caption: string;
+  png: Buffer;
+}
+
 export interface DocumentSection {
   heading: string;
   body: string;
+  figures?: DocumentFigure[];
 }
 
 export interface DocumentMeta {
@@ -230,6 +244,31 @@ export async function renderDocx(meta: DocumentMeta, sections: DocumentSection[]
       }),
     );
     for (const block of parseBlocks(section.body)) children.push(...renderBlock(block));
+
+    for (const figure of section.figures ?? []) {
+      try {
+        children.push(
+          new Paragraph({
+            spacing: { before: 200, after: 60 },
+            children: [
+              new ImageRun({
+                data: figure.png,
+                // 1280x800 captures, scaled to the text column.
+                transformation: { width: 460, height: 288 },
+                type: 'png',
+              }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [new TextRun({ text: figure.caption, italics: true, size: 16, color: '6B7280' })],
+          }),
+        );
+      } catch {
+        // A corrupt image must not fail the export. The finding's text stands
+        // on its own; the picture supports it, it does not carry it.
+      }
+    }
   }
 
   const doc = new Document({
