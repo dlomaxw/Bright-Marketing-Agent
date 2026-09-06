@@ -28,7 +28,8 @@
     "email:check": "tsx scripts/email-readiness.ts",
     "storage:check": "tsx scripts/storage-check.ts",
     "user:create": "tsx scripts/create-user.ts",
-    "email:auth": "tsx scripts/email-auth-check.ts"
+    "email:auth": "tsx scripts/email-auth-check.ts",
+    "agent:daily": "tsx scripts/agent-daily.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

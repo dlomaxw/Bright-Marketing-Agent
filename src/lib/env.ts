@@ -77,6 +77,9 @@ const schema = z.object({
   LINKEDIN_ACCESS_TOKEN: z.string().default(''),
   YOUTUBE_API_KEY: z.string().default(''),
 
+  /** Shared secret for scheduled runs. Unset disables the cron endpoints. */
+  CRON_SECRET: z.string().default(''),
+
   STORAGE_DRIVER: z.enum(['local','r2']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('./storage'),
 });

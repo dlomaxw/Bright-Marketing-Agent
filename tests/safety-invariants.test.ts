@@ -229,3 +229,46 @@ describe('audience metrics', () => {
     expect(route!.source).toMatch(/Unrecognised checklist item/);
   });
 });
+
+describe('the scheduled agent', () => {
+  /**
+   * The agent runs every day with nobody watching. Everything that makes that
+   * acceptable is the set of things it does NOT do, so those are asserted here
+   * rather than left to the reading of a comment.
+   */
+  const agent = () => files.find((f) => f.path === 'server/agent/daily.ts');
+
+  it('exists', () => {
+    expect(agent(), 'server/agent/daily.ts is missing').toBeDefined();
+  });
+
+  it('never verifies a finding or publishes one to a client', () => {
+    const source = agent()!.source;
+    expect(
+      assignsInData(source, /verificationStatus:\s*['"]manually_verified['"]/),
+      'the scheduled agent must not verify findings',
+    ).toBe(false);
+    expect(
+      assignsInData(source, /clientVisible:\s*true/),
+      'the scheduled agent must not publish findings to clients',
+    ).toBe(false);
+  });
+
+  it('never sends email', () => {
+    const source = agent()!.source;
+    // Delivery goes through emails/send.ts, which re-evaluates every gate.
+    // Reaching the transport or the send path directly would bypass them.
+    expect(source).not.toMatch(/sendMail|deliverBySmtp|from '@\/server\/emails\/send'/);
+  });
+
+  it('the cron endpoints refuse to run without a configured secret', () => {
+    for (const path of ['app/api/cron/daily/route.ts', 'app/api/cron/drain/route.ts']) {
+      const route = files.find((f) => f.path === path);
+      expect(route, `${path} is missing`).toBeDefined();
+      // An unauthenticated endpoint here would let anyone queue crawls of
+      // hundreds of third-party websites in this agency's name.
+      expect(route!.source).toMatch(/CRON_SECRET/);
+      expect(route!.source).toMatch(/401/);
+    }
+  });
+});

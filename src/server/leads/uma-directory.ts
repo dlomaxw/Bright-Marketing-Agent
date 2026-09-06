@@ -326,6 +326,34 @@ export interface UmaImportOptions {
   edition?: string;
 }
 
+/**
+ * Retries a database call through a transient loss of the connection.
+ *
+ * Serverless Postgres suspends idle compute and hands back P1001 ("can't reach
+ * database server") or P2024 (pool timeout) while it wakes. A 1,500-entry
+ * import is long enough to meet that at least once, and the first production
+ * run died two thirds of the way through because of it. These are waits, not
+ * failures — anything else is re-thrown immediately, so a real error still
+ * stops the import rather than being retried into silence.
+ */
+async function withReconnect<T>(operation: () => Promise<T>, attempts = 5): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      // P1001 unreachable, P1017 server closed the connection, P2024 pool
+      // timeout. All three are the compute suspending or a connection being
+      // recycled underneath a long job, not a problem with the data.
+      if (code !== 'P1001' && code !== 'P1017' && code !== 'P2024') throw err;
+      lastError = err;
+      await new Promise((resolve) => setTimeout(resolve, 1_000 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
 export interface UmaImportSummary {
   parsed: number;
   eligible: number;
@@ -386,16 +414,18 @@ export async function importUmaDirectory(
      * organization for a human to look at, not merged away. Losing a prospect
      * is invisible; a near-duplicate sitting in the list is not.
      */
-    const existing = await db.organization.findFirst({
-      where: { deletedAt: null, nameKey: nKey },
-    });
+    const existing = await withReconnect(() =>
+      db.organization.findFirst({ where: { deletedAt: null, nameKey: nKey } }),
+    );
 
     const domainSibling =
       !existing && dKey
-        ? await db.organization.findFirst({
-            where: { deletedAt: null, domainKey: dKey },
-            select: { legalName: true },
-          })
+        ? await withReconnect(() =>
+            db.organization.findFirst({
+              where: { deletedAt: null, domainKey: dKey },
+              select: { legalName: true },
+            }),
+          )
         : null;
 
     const provenance =
@@ -431,7 +461,7 @@ export async function importUmaDirectory(
       .join('\n');
 
     const org = existing
-      ? await db.organization.update({
+      ? await withReconnect(() => db.organization.update({
           where: { id: existing.id },
           data: {
             website: existing.website ?? entry.website,
@@ -439,8 +469,8 @@ export async function importUmaDirectory(
             industry: existing.industry ?? 'Manufacturing',
             notes: existing.notes ? `${existing.notes}\n\n${provenance}` : notes,
           },
-        })
-      : await db.organization.create({
+        }))
+      : await withReconnect(() => db.organization.create({
           data: {
             legalName: entry.name,
             nameKey: nKey,
@@ -458,7 +488,7 @@ export async function importUmaDirectory(
             tagsJson: JSON.stringify(['uma-directory', 'manufacturing']),
             notes,
           },
-        });
+        }));
 
     if (existing) summary.merged += 1;
     else summary.created += 1;
@@ -471,7 +501,7 @@ export async function importUmaDirectory(
     if (contactName || primaryEmail || primaryPhone) {
       const eKey = emailKey(primaryEmail);
       const pKey = phoneKey(primaryPhone);
-      const duplicate = await db.contact.findFirst({
+      const duplicate = await withReconnect(() => db.contact.findFirst({
         where: {
           organizationId: org.id,
           deletedAt: null,
@@ -481,10 +511,10 @@ export async function importUmaDirectory(
             ...(contactName ? [{ name: contactName }] : []),
           ],
         },
-      });
+      }));
 
       if (!duplicate) {
-        await db.contact.create({
+        await withReconnect(() => db.contact.create({
           data: {
             organizationId: org.id,
             name: contactName || '(name not published)',
@@ -500,7 +530,7 @@ export async function importUmaDirectory(
             verificationStatus: 'unverified',
             isPrimary: true,
           },
-        });
+        }));
       }
     }
 
