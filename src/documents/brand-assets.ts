@@ -56,7 +56,7 @@ export function contactLines(): string[] {
     BRAND.companyName,
     BRAND.address,
     BRAND.phones.join(' · '),
-    BRAND.email,
+    [BRAND.email, BRAND.emailSending].filter(Boolean).join(' · '),
     BRAND.websites.join(' · '),
   ].filter(Boolean);
 }

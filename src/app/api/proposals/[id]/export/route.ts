@@ -114,7 +114,7 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
         '',
         BRAND.address,
         `Telephone: ${BRAND.phones.join(' · ')}`,
-        `Email: ${BRAND.email}`,
+        `Email: ${BRAND.email} · ${BRAND.emailSending}`,
         `Web: ${BRAND.websites.join(' · ')}`,
       ].join('\n'),
     },

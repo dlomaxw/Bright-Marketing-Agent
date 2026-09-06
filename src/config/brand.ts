@@ -18,7 +18,17 @@ export const BRAND = {
   phone: '+256 750 421 224',
   phoneAlt: '+256 761 832 333',
   phones: ['+256 750 421 224', '+256 761 832 333'],
-  email: 'info@shinebebright.com',
+  /**
+   * The address printed on client-facing documents, as supplied by the owner.
+   *
+   * Distinct from the mailbox outreach is sent from, which is
+   * EMAIL_FROM_ADDRESS (info@shinebebright.com) — that one is authenticated,
+   * SPF/DKIM/DMARC-aligned, and is where replies land. Both are listed so a
+   * reader can use either, and neither is presented as the other.
+   */
+  email: 'brightthoughtsservices@gmail.com',
+  /** The authenticated mailbox outreach is sent from and replies return to. */
+  emailSending: 'info@shinebebright.com',
   websiteUrl: 'https://www.shinebebright.com',
   /**
    * Both domains are live and both are printed on the company profile's

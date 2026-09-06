@@ -123,6 +123,7 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
               <p className="text-slate-500">{BRAND.address}</p>
               <p className="text-slate-500">{BRAND.phones.join(' · ')}</p>
               <p className="text-slate-500">{BRAND.email}</p>
+              <p className="text-slate-500">{BRAND.emailSending}</p>
               <p className="text-slate-500">{BRAND.websites.join(' · ')}</p>
             </div>
           </div>
@@ -329,7 +330,10 @@ export default async function ProposalCanvasPage({ params }: { params: Promise<{
               <p>{BRAND.address}</p>
               <p>{BRAND.phones.join(' · ')}</p>
               <p>
-                {BRAND.email} · {BRAND.websites.join(' · ')}
+                {BRAND.email} · {BRAND.emailSending}
+              </p>
+              <p>
+                {BRAND.websites.join(' · ')}
               </p>
             </div>
           </footer>
