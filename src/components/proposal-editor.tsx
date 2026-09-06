@@ -177,16 +177,10 @@ export function ProposalEditor({
           {permissions.submit && ['draft', 'changes_requested'].includes(proposal.status) && (
             <button
               type="button"
-              disabled={busy !== null || dirty || !proposal.commercialsSetBy}
+              disabled={busy !== null || dirty}
               onClick={() => workflow('submit')}
               className={buttonClass('primary')}
-              title={
-                dirty
-                  ? 'Save your changes first'
-                  : !proposal.commercialsSetBy
-                    ? 'Confirm the commercial terms first'
-                    : undefined
-              }
+              title={dirty ? 'Save your changes first' : undefined}
             >
               {busy === 'submit' ? 'Submitting…' : 'Submit for approval'}
             </button>

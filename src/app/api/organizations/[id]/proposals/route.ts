@@ -24,8 +24,11 @@ export const POST = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   return ok(
     {
       ...result,
+      // Not a warning any more. A proposal with no figures is the normal case
+      // here: the fee depends on the scope the client settles on, so it is
+      // agreed in conversation rather than quoted from a list.
       warnings: result.pricingRequired
-        ? ['One or more service lines have no price. An authorised user must set every fee before this proposal can be submitted for approval.']
+        ? ['This proposal carries the scope and no figures. Fees are agreed with the client once the scope is. To quote fixed prices instead, set every line fee and switch the proposal to fixed pricing.']
         : [],
     },
     201,

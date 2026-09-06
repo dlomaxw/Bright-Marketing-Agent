@@ -57,7 +57,7 @@ export function contactLines(): string[] {
     BRAND.address,
     BRAND.phones.join(' · '),
     BRAND.email,
-    BRAND.websiteUrl.replace(/^https?:\/\//, ''),
+    BRAND.websites.join(' · '),
   ].filter(Boolean);
 }
 

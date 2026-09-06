@@ -20,6 +20,12 @@ export const BRAND = {
   phones: ['+256 750 421 224', '+256 761 832 333'],
   email: 'info@shinebebright.com',
   websiteUrl: 'https://www.shinebebright.com',
+  /**
+   * Both domains are live and both are printed on the company profile's
+   * contact page, so client-facing documents carry both. The first is the one
+   * the platform and mail run on.
+   */
+  websites: ['www.shinebebright.com', 'www.brightilluminated.com'],
   address: 'The Square Building, 3rd Street, Industrial Area, Kampala, Uganda',
   city: 'Kampala',
   country: 'Uganda',

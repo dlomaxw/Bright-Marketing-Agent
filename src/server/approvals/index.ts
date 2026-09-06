@@ -63,18 +63,37 @@ export async function submitForApproval(
     throw new AppError('This email has already been sent.', 409);
   }
 
-  // Extra guard for proposals: commercial fields must be human-confirmed first.
+  /**
+   * Proposals and money.
+   *
+   * A proposal may go out with no figures at all. The fee here depends on the
+   * scope the client settles on, so it is agreed in conversation rather than
+   * printed — and a document showing "UGX 0" against every line is worse than
+   * one that says plainly the price is discussed once scope is agreed.
+   *
+   * What is still refused is a proposal that is *half* priced: some lines with
+   * a fee and some without reads as a quotation with items accidentally left at
+   * zero, and a client could reasonably hold us to it. Either every line
+   * carries a fee a person set, or none does.
+   */
   if (type === 'proposal') {
     const proposal = await db.proposal.findUnique({ where: { id }, include: { items: true } });
-    if (proposal && !proposal.commercialsSetBy) {
+    if (proposal && proposal.pricingBasis === 'fixed') {
+      if (!proposal.commercialsSetBy) {
+        throw new AppError(
+          'This proposal is set to fixed pricing but the commercial terms have not been confirmed. An authorised user must set the fees, tax and payment terms, or change it to price-on-discussion.',
+          409,
+        );
+      }
+      if (proposal.items.some((i) => i.unitFee <= 0)) {
+        throw new AppError(
+          'One or more lines still have no fee. Set every fee, or change the proposal to price-on-discussion.',
+          409,
+        );
+      }
+    } else if (proposal && proposal.items.some((i) => i.unitFee > 0)) {
       throw new AppError(
-        'The commercial terms have not been confirmed. An authorised user must set the fees, tax and payment terms before this proposal can be submitted.',
-        409,
-      );
-    }
-    if (proposal?.items.some((i) => i.unitFee <= 0)) {
-      throw new AppError(
-        'One or more proposal lines still have no fee. Set every fee before submitting.',
+        'This proposal is set to price-on-discussion but some lines carry a fee. A partly priced document reads as a quotation. Clear the fees, or switch it to fixed pricing.',
         409,
       );
     }

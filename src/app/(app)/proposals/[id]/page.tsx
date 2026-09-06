@@ -106,14 +106,33 @@ export default async function ProposalDetail({ params }: { params: Promise<{ id:
         }
       />
 
-      {!proposal.commercialsSetBy && (
+      {proposal.pricingBasis !== 'fixed' ? (
         <div className="mb-4">
-          <Notice tone="warn" title="Commercial terms have not been confirmed">
-            Prices, tax, payment terms and legal wording are set by an authorised person, never
-            generated. This proposal cannot be submitted for approval until they are confirmed
-            {unpriced.length > 0 && ` — ${unpriced.length} line(s) still have no fee`}.
+          <Notice tone="info" title="Price on discussion">
+            This proposal sets out the scope and carries no figures. The exported document says so
+            in as many words, and states that it is a scope of work rather than a quotation.
+            {unpriced.length > 0 && unpriced.length < proposal.items.length && (
+              <>
+                {' '}
+                <strong>
+                  {proposal.items.length - unpriced.length} line(s) do carry a fee, which would make
+                  it read as a partly completed quotation.
+                </strong>{' '}
+                Clear those fees, or switch this proposal to fixed pricing.
+              </>
+            )}
           </Notice>
         </div>
+      ) : (
+        !proposal.commercialsSetBy && (
+          <div className="mb-4">
+            <Notice tone="warn" title="Fixed pricing, but the terms are not confirmed">
+              Prices, tax, payment terms and legal wording are set by an authorised person, never
+              generated. A fixed-price proposal cannot be submitted until they are confirmed
+              {unpriced.length > 0 && ` — ${unpriced.length} line(s) still have no fee`}.
+            </Notice>
+          </div>
+        )
       )}
 
       <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">

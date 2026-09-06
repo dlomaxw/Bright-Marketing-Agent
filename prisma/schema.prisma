@@ -488,6 +488,16 @@ model Proposal {
   acceptanceTerms String?
   nextSteps       String?
   commercialsSetBy String?
+  /**
+   * How this proposal handles money.
+   *
+   * "to_be_agreed" — no figures. Scope is set out, and the fee is agreed with
+   * the client once the scope is. This is the default because the fee genuinely
+   * depends on what the client needs, and a table of zeros is worse than an
+   * honest sentence saying the price is discussed.
+   * "fixed" — every line carries a fee an authorised person entered.
+   */
+  pricingBasis    String  @default("to_be_agreed")
   commercialsSetAt DateTime?
 
   generatedByAi Boolean  @default(false)

@@ -8,6 +8,7 @@ import { renderPdf } from '@/documents/pdf';
 import { loadFindingFigures } from '@/documents/figures';
 import { logActivity } from '@/server/activity';
 import { PHASE_LABELS } from '@/lib/enums';
+import { BRAND } from '@/config/brand';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,20 +27,46 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   const cur = proposal.currency;
   const fmt = (n: number) => `${cur} ${n.toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
-  const investmentRows = [
-    '| Item | Phase | Qty | Unit fee | Line total |',
-    '| --- | --- | --- | --- | --- |',
-    ...proposal.items.map(
-      (i) =>
-        `| ${i.name} | ${PHASE_LABELS[i.phase] ?? i.phase} | ${i.quantity} | ${fmt(i.unitFee)} | ${fmt(i.lineTotal)} |`,
-    ),
-    `| **Subtotal** |  |  |  | **${fmt(proposal.subtotal)}** |`,
-    ...(proposal.discount > 0 ? [`| Discount |  |  |  | -${fmt(proposal.discount)} |`] : []),
-    ...(proposal.taxRate > 0
-      ? [`| Tax (${Math.round(proposal.taxRate * 100)}%) |  |  |  | ${fmt(proposal.taxAmount)} |`]
-      : []),
-    `| **Total** |  |  |  | **${fmt(proposal.total)}** |`,
-  ].join('\n');
+  /**
+   * Two ways to present the money, and the document must not mix them.
+   *
+   * Where the fee depends on the scope the client settles on, printing a table
+   * of "UGX 0" against every line is not neutral — it reads as a quotation with
+   * mistakes in it, and a client could reasonably ask to be held to it. The
+   * honest version says what is being scoped and that the fee follows the
+   * scope.
+   *
+   * The work itself is still itemised either way. What changes is whether a
+   * number appears beside it.
+   */
+  const priceOnDiscussion = proposal.pricingBasis !== 'fixed';
+
+  const investmentRows = priceOnDiscussion
+    ? [
+        '| Item | Phase | Quantity |',
+        '| --- | --- | --- |',
+        ...proposal.items.map(
+          (i) => `| ${i.name} | ${PHASE_LABELS[i.phase] ?? i.phase} | ${i.quantity} |`,
+        ),
+        '',
+        `Fees are agreed against the scope above rather than quoted from a list. ${BRAND.companyName} will confirm the investment for each phase once the scope, timing and priorities are settled with you — so you pay for the work you actually want, in the order you want it.`,
+        '',
+        'This document is a scope of work, not a quotation, and no figure in it is binding on either party.',
+      ].join('\n')
+    : [
+        '| Item | Phase | Qty | Unit fee | Line total |',
+        '| --- | --- | --- | --- | --- |',
+        ...proposal.items.map(
+          (i) =>
+            `| ${i.name} | ${PHASE_LABELS[i.phase] ?? i.phase} | ${i.quantity} | ${fmt(i.unitFee)} | ${fmt(i.lineTotal)} |`,
+        ),
+        `| **Subtotal** |  |  |  | **${fmt(proposal.subtotal)}** |`,
+        ...(proposal.discount > 0 ? [`| Discount |  |  |  | -${fmt(proposal.discount)} |`] : []),
+        ...(proposal.taxRate > 0
+          ? [`| Tax (${Math.round(proposal.taxRate * 100)}%) |  |  |  | ${fmt(proposal.taxAmount)} |`]
+          : []),
+        `| **Total** |  |  |  | **${fmt(proposal.total)}** |`,
+      ].join('\n');
 
   const deliverablesBlock = proposal.items
     .map((i) => {
@@ -58,8 +85,15 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     { heading: 'Timeline', body: proposal.timeline ?? '' },
     { heading: 'Client responsibilities', body: proposal.clientResponsibilities ?? '' },
     { heading: 'Required assets and access', body: proposal.requiredAssets ?? '' },
-    { heading: 'Investment', body: investmentRows },
-    { heading: 'Payment schedule', body: proposal.paymentSchedule ?? 'To be confirmed.' },
+    { heading: priceOnDiscussion ? 'Investment and scope' : 'Investment', body: investmentRows },
+    {
+      heading: 'Payment schedule',
+      body:
+        proposal.paymentSchedule ??
+        (priceOnDiscussion
+          ? 'Agreed with the investment, once the scope is confirmed.'
+          : 'To be confirmed.'),
+    },
     { heading: 'Assumptions', body: proposal.assumptions ?? 'To be confirmed.' },
     { heading: 'Exclusions', body: proposal.exclusions ?? 'To be confirmed.' },
     { heading: 'Change control', body: proposal.changeControl ?? 'To be confirmed.' },
@@ -71,6 +105,19 @@ export const GET = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     },
     { heading: 'Acceptance', body: proposal.acceptanceTerms ?? 'Signature, name, position and date.' },
     { heading: 'Next steps', body: proposal.nextSteps ?? '' },
+    {
+      // Repeated at the end as well as the cover: a proposal is read, put down,
+      // and picked up again by someone who needs to reply to it.
+      heading: 'About us',
+      body: [
+        `**${BRAND.companyName}** — ${BRAND.tagline}`,
+        '',
+        BRAND.address,
+        `Telephone: ${BRAND.phones.join(' · ')}`,
+        `Email: ${BRAND.email}`,
+        `Web: ${BRAND.websites.join(' · ')}`,
+      ].join('\n'),
+    },
   ].filter((s) => s.body.trim().length > 0);
 
   const meta = {

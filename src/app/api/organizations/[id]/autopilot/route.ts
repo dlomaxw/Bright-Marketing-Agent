@@ -144,7 +144,7 @@ export const POST = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
       proposalId = proposalRes.id;
       stepsExecuted.push(
         proposalRes.pricingRequired
-          ? 'Generated proposal draft — an authorised user must set every fee before it can be submitted.'
+          ? 'Generated proposal draft. It carries the scope and no figures: fees are agreed with the client once the scope is.'
           : 'Generated commercial proposal draft',
       );
     } catch (err) {

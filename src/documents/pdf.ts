@@ -159,6 +159,21 @@ export async function renderPdf(meta: DocumentMeta, sections: DocumentSection[])
         .strokeColor('#E4EAF2')
         .stroke();
 
+      /**
+       * The mark goes on every page, not only the cover.
+       *
+       * Client documents get printed, forwarded and read a page at a time, and
+       * a page separated from its cover should still say who wrote it.
+       */
+      const pageLogo = logoBuffer();
+      if (pageLogo) {
+        try {
+          doc.image(pageLogo, PAGE_WIDTH - MARGIN - 22, footerY - 2, { width: 22, height: 22 });
+        } catch {
+          // A corrupt logo must never fail an export.
+        }
+      }
+
       doc
         .fillColor('#8896A6')
         .fontSize(7.5)
