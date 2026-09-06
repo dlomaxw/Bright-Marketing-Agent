@@ -71,13 +71,19 @@ export async function submitForApproval(
    * printed — and a document showing "UGX 0" against every line is worse than
    * one that says plainly the price is discussed once scope is agreed.
    *
-   * What is still refused is a proposal that is *half* priced: some lines with
-   * a fee and some without reads as a quotation with items accidentally left at
-   * zero, and a client could reasonably hold us to it. Either every line
-   * carries a fee a person set, or none does.
+   * A fee left on a price-on-discussion proposal is not refused. I blocked it
+   * at first, reasoning that a half-priced document reads as a quotation — but
+   * the export omits every money column under this basis, so such a document
+   * cannot be produced. The guard only stopped people submitting proposals
+   * whose stored fees the client would never see.
+   *
+   * The fees are cleared instead, so the record matches the document. Leaving
+   * them would mean that switching the proposal to fixed pricing later
+   * resurrected figures nobody had reviewed for this client.
    */
   if (type === 'proposal') {
     const proposal = await db.proposal.findUnique({ where: { id }, include: { items: true } });
+
     if (proposal && proposal.pricingBasis === 'fixed') {
       if (!proposal.commercialsSetBy) {
         throw new AppError(
@@ -92,10 +98,30 @@ export async function submitForApproval(
         );
       }
     } else if (proposal && proposal.items.some((i) => i.unitFee > 0)) {
-      throw new AppError(
-        'This proposal is set to price-on-discussion but some lines carry a fee. A partly priced document reads as a quotation. Clear the fees, or switch it to fixed pricing.',
-        409,
-      );
+      const cleared = proposal.items.filter((i) => i.unitFee > 0).length;
+
+      for (const item of proposal.items) {
+        if (item.unitFee === 0 && item.lineTotal === 0) continue;
+        await db.proposalItem.update({
+          where: { id: item.id },
+          data: { unitFee: 0, lineTotal: 0 },
+        });
+      }
+      await db.proposal.update({
+        where: { id: proposal.id },
+        data: { subtotal: 0, taxAmount: 0, total: 0 },
+      });
+
+      await logActivity({
+        organizationId: proposal.organizationId,
+        actorId: user.id,
+        action: 'proposal.fees_cleared',
+        entityType: 'proposal',
+        entityId: proposal.id,
+        newValue: { linesCleared: cleared, pricingBasis: proposal.pricingBasis },
+        reason:
+          'Submitted as price-on-discussion, so stored fees were cleared to match the document, which carries no figures.',
+      });
     }
   }
 
