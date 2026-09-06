@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { CHECK_GROUPS, CLIENT_ELIGIBLE_STATUSES } from '@/lib/enums';
+import type { Role } from '@/lib/enums';
 import { createAuditRun, drainQueue } from '@/server/audit/runner';
 import { recomputeScores } from '@/server/scoring/recompute';
 import { buildResearchBrief } from '@/server/reports/research-brief';
@@ -70,6 +71,10 @@ export interface DailyAgentResult {
     sessionsPurged: number;
     findingsApproved: number;
     findingsSentBack: number;
+    socialChecked: number;
+    socialFindings: number;
+    emailsDrafted: number;
+    findingsRetired: number;
   };
   /** Work a person must do before anything can reach a client. */
   awaitingHumanReview: {
@@ -137,6 +142,10 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
     sessionsPurged: 0,
     findingsApproved: 0,
     findingsSentBack: 0,
+    socialChecked: 0,
+    socialFindings: 0,
+    emailsDrafted: 0,
+    findingsRetired: 0,
   };
 
   // --- 1. Housekeeping ------------------------------------------------------
@@ -336,6 +345,134 @@ export async function runDailyAgent(options: DailyAgentOptions = {}): Promise<Da
     if (counts.proposalsDrafted > 0) {
       steps.push(
         `Drafted ${counts.proposalsDrafted} proposal(s) from approved reports. Every fee must still be set by an authorised person.`,
+      );
+    }
+  }
+
+  // --- 6b. Social and review research ---------------------------------------
+  // Google reviews and audience figures where a platform permits reading them.
+  // Everything a platform will not expose is returned as a stated reason, not
+  // an estimate, and lands in the organization's manual-review list.
+  if (hasTime(45_000)) {
+    const { runReviewAudit } = await import('@/server/leads/review-audit');
+    const withProfiles = await db.organization.findMany({
+      where: { deletedAt: null, profiles: { some: {} } },
+      orderBy: { updatedAt: 'asc' },
+      take: 10,
+      select: { id: true },
+    });
+    for (const org of withProfiles) {
+      if (!hasTime(35_000)) break;
+      try {
+        const res = await runReviewAudit(org.id, actorId);
+        counts.socialChecked += 1;
+        counts.socialFindings += res.findingsCreated;
+      } catch {
+        // A platform refusing us is not a reason to stop the run.
+      }
+    }
+    if (counts.socialChecked > 0) {
+      steps.push(
+        `Checked reviews and audiences for ${counts.socialChecked} organization(s); ${counts.socialFindings} finding(s) recorded.`,
+      );
+    }
+  }
+
+  // --- 6c. Outreach drafts ---------------------------------------------------
+  //
+  // Drafts only, and only where an approved proposal already exists. The draft
+  // is written, the eleven send gates are evaluated against it when someone
+  // tries to send, and a person still approves the recipient. Nothing here
+  // transmits anything.
+  if (hasTime(40_000)) {
+    const { createEmailDraft } = await import('@/server/emails/draft');
+    const actor = await db.user.findUnique({
+      where: { id: actorId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        roleCode: true,
+        seniorApprover: true,
+        signature: true,
+      },
+    });
+
+    if (actor) {
+      const readyForOutreach = await db.organization.findMany({
+        where: {
+          deletedAt: null,
+          proposals: { some: { deletedAt: null, status: 'approved' } },
+          emailDrafts: { none: { deletedAt: null } },
+          contacts: { some: { deletedAt: null, optedOut: false } },
+        },
+        take: 5,
+        select: {
+          id: true,
+          proposals: {
+            where: { deletedAt: null, status: 'approved' },
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: { id: true, reportId: true },
+          },
+        },
+      });
+
+      for (const org of readyForOutreach) {
+        if (!hasTime(30_000)) break;
+        try {
+          await createEmailDraft({
+            organizationId: org.id,
+            proposalId: org.proposals[0]?.id ?? null,
+            reportId: org.proposals[0]?.reportId ?? null,
+            // The full session shape, not a cast. The draft signs off with
+            // this user's signature, so a missing field would silently produce
+            // an unsigned message to a real business.
+            user: {
+              id: actor.id,
+              name: actor.name,
+              email: actor.email,
+              role: actor.roleCode as Role,
+              seniorApprover: actor.seniorApprover,
+              signature: actor.signature,
+            },
+          });
+          counts.emailsDrafted += 1;
+        } catch {
+          // Drafting refuses on a missing contact or stale evidence. That is
+          // the gate working, not an error worth retrying.
+        }
+      }
+      if (counts.emailsDrafted > 0) {
+        steps.push(
+          `Drafted ${counts.emailsDrafted} outreach email(s). Every one waits for a person to approve the recipient before anything is sent.`,
+        );
+      }
+    }
+  }
+
+  // --- 6d. Retire evidence that is too old to support a claim ----------------
+  //
+  // A finding whose evidence has aged past the freshness window is no longer
+  // something we can put in front of a business: the site may have been fixed.
+  // Marking it `outdated` removes it from client-facing use and puts it back in
+  // the queue for a fresh look, rather than letting a stale claim go out.
+  if (hasTime(25_000)) {
+    const freshnessHours = Number(process.env.EVIDENCE_FRESHNESS_HOURS ?? 168);
+    const staleBefore = new Date(Date.now() - freshnessHours * 3_600_000);
+    const stale = await db.finding.updateMany({
+      where: {
+        deletedAt: null,
+        clientVisible: true,
+        verificationStatus: { in: [...CLIENT_ELIGIBLE_STATUSES] },
+        observedAt: { lt: staleBefore },
+      },
+      data: { verificationStatus: 'outdated', clientVisible: false },
+    });
+    counts.findingsRetired = stale.count;
+    if (stale.count > 0) {
+      steps.push(
+        `Retired ${stale.count} finding(s) whose evidence aged past the freshness window. They are no longer client-facing and need re-observing.`,
       );
     }
   }
