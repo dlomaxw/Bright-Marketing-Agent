@@ -97,8 +97,27 @@ export const PATCH = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
     }
   }
 
-  // Editing after a rejection returns it to draft so it must be resubmitted.
-  if (proposal.status === 'changes_requested' || proposal.status === 'pending_approval') {
+  /**
+   * Any edit to something already through, or part-way through, approval sends
+   * it back to draft.
+   *
+   * Including an approved proposal. Costs legitimately change after a
+   * conversation with the client, and refusing that only makes people rebuild
+   * the proposal from nothing. What must not happen is the approval silently
+   * covering content the approver never saw — so the approval is withdrawn and
+   * the amended version goes round again.
+   *
+   * A superseded version is the one thing never editable: it is the record of
+   * what version n said, and changing it rewrites history.
+   */
+  if (proposal.status === 'superseded') {
+    throw badRequest(
+      'A superseded version is a record of what that version said and cannot be edited. Open the current version instead.',
+    );
+  }
+
+  const reopened = ['changes_requested', 'pending_approval', 'approved'].includes(proposal.status);
+  if (reopened) {
     data.status = 'draft';
   }
 
@@ -156,6 +175,21 @@ export const PATCH = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   ]);
 
   await recalculateTotals(id);
+
+  if (proposal.status === 'approved') {
+    // Recorded separately: an approval being withdrawn is a decision changing,
+    // not just a field being edited.
+    await logActivity({
+      organizationId: proposal.organizationId,
+      actorId: user.id,
+      action: 'proposal.reopened',
+      entityType: 'proposal',
+      entityId: id,
+      previousValue: 'approved',
+      newValue: 'draft',
+      reason: 'Edited after approval, so the approval was withdrawn and it must be approved again.',
+    });
+  }
 
   await logActivity({
     organizationId: proposal.organizationId,

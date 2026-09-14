@@ -58,7 +58,21 @@ export default async function ProposalDetail({ params }: { params: Promise<{ id:
     : [];
   const findingById = new Map(findings.map((f) => [f.id, f]));
 
-  const locked = ['approved', 'superseded'].includes(proposal.status);
+  /**
+   * Only a superseded version is closed to editing.
+   *
+   * A superseded proposal is a historical record of what version n said —
+   * changing it would rewrite history. An approved one is different: the work
+   * may genuinely need re-costing after the client talks, and refusing that
+   * only pushes people into rebuilding the proposal from scratch.
+   *
+   * So approved stays editable for anyone with the permission, and editing it
+   * returns it to draft for re-approval. The invariant that matters is not
+   * "approved content never changes" but "an approval always refers to exactly
+   * the content that was approved" — and reverting to draft preserves that.
+   */
+  const locked = proposal.status === 'superseded';
+  const editingWillReopen = proposal.status === 'approved';
   const unpriced = proposal.items.filter((i) => i.unitFee <= 0);
 
   return (
@@ -122,6 +136,16 @@ export default async function ProposalDetail({ params }: { params: Promise<{ id:
           </>
         }
       />
+
+      {editingWillReopen && can(user.role, 'proposal.edit') && (
+        <div className="mb-4">
+          <Notice tone="warn" title="This proposal is approved">
+            You can still change the costing or any other field. Saving returns it to draft and it
+            must be approved again — an approval has to refer to the content that was actually
+            approved, so a change cannot quietly ride on the old one.
+          </Notice>
+        </div>
+      )}
 
       {proposal.pricingBasis !== 'fixed' ? (
         <div className="mb-4">
