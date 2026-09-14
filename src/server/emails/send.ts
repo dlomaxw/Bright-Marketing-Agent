@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import { AppError } from '@/lib/api';
 import { logActivity } from '@/server/activity';
+import { can } from '@/server/auth/permissions';
 import { evaluateGates } from './gates';
 import type { SessionUser } from '@/server/auth/session';
 
@@ -46,8 +47,22 @@ export async function sendApprovedEmail(
   const approval = draft.approvals.find(
     (a) => a.status === 'approved' && a.entityVersion === draft.version,
   );
+  /**
+   * The same exemption as the approval step, rather than a different answer at
+   * the last moment.
+   *
+   * An administrator who may approve their own submission may also send it —
+   * blocking here would only produce an email approved and ready that nobody
+   * present is allowed to send, which is a dead end rather than a control.
+   * Every other role still needs a second person, and the global
+   * ALLOW_SELF_SEND_AFTER_APPROVAL escape hatch is unchanged.
+   *
+   * The activity log already records a self-approval as one, so the trail
+   * still shows that one person did all three steps.
+   */
   if (
     !env.ALLOW_SELF_SEND_AFTER_APPROVAL &&
+    !can(user.role, 'approval.self_approve') &&
     approval?.decidedById === user.id &&
     approval?.submittedById === user.id
   ) {
