@@ -245,6 +245,7 @@ export async function deliverBySmtp(message: OutgoingMessage): Promise<string> {
         messageId,
         date: sentAt,
         headers: { 'List-Unsubscribe': unsubscribeHeader },
+        attachments: message.attachments,
       }),
     );
     if (!copy.ok) {

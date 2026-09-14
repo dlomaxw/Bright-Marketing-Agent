@@ -57,7 +57,21 @@ export function buildRfc822(message: {
   messageId: string;
   date: Date;
   headers?: Record<string, string>;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }): string {
+  /**
+   * With attachments the copy must be multipart, exactly as the delivered
+   * message is.
+   *
+   * The first version of this built a text/plain copy regardless, so a message
+   * that reached a client with an audit and a proposal enclosed was filed in
+   * Sent as bare text. The delivery was right and the record was wrong, which
+   * is the worse of the two to get wrong: the record is what you reach for when
+   * a client asks what you sent them.
+   */
+  const attachments = message.attachments ?? [];
+  const boundary = `----brightscope-${message.messageId.replace(/[<>@.]/g, '').slice(0, 24)}`;
+
   const headers = [
     `From: ${formatAddress(message.fromName, message.from)}`,
     `To: ${formatAddress(message.toName, message.to)}`,
@@ -66,17 +80,42 @@ export function buildRfc822(message: {
     `Date: ${message.date.toUTCString()}`,
     `Message-ID: ${message.messageId}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    // Base64 avoids every line-length and non-ASCII question in one step.
-    'Content-Transfer-Encoding: base64',
+    ...(attachments.length > 0
+      ? [`Content-Type: multipart/mixed; boundary="${boundary}"`]
+      : [
+          'Content-Type: text/plain; charset=UTF-8',
+          // Base64 avoids every line-length and non-ASCII question in one step.
+          'Content-Transfer-Encoding: base64',
+        ]),
     ...Object.entries(message.headers ?? {}).map(([k, v]) => `${k}: ${v}`),
   ];
 
-  const encoded = Buffer.from(message.body, 'utf8')
-    .toString('base64')
-    .replace(/(.{76})/g, '$1\r\n');
+  const b64 = (buf: Buffer) => buf.toString('base64').replace(/(.{76})/g, '$1\r\n');
+  const encodedBody = b64(Buffer.from(message.body, 'utf8'));
 
-  return `${headers.join('\r\n')}\r\n\r\n${encoded}\r\n`;
+  if (attachments.length === 0) {
+    return `${headers.join('\r\n')}\r\n\r\n${encodedBody}\r\n`;
+  }
+
+  const parts = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    encodedBody,
+    ...attachments.flatMap((a) => [
+      `--${boundary}`,
+      `Content-Type: ${a.contentType}; name="${a.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${a.filename}"`,
+      '',
+      b64(a.content),
+    ]),
+    `--${boundary}--`,
+    '',
+  ];
+
+  return `${headers.join('\r\n')}\r\n\r\n${parts.join('\r\n')}`;
 }
 
 export function sentCopyConfigured(): boolean {
