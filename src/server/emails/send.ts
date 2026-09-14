@@ -5,6 +5,11 @@ import { AppError } from '@/lib/api';
 import { logActivity } from '@/server/activity';
 import { can } from '@/server/auth/permissions';
 import { evaluateGates } from './gates';
+import {
+  buildProposalDocument,
+  buildReportDocument,
+  renderDocument,
+} from '@/documents/deliverables';
 import type { SessionUser } from '@/server/auth/session';
 
 /**
@@ -83,6 +88,40 @@ export async function sendApprovedEmail(
   }
 
   const manual = options.manual || env.EMAIL_PROVIDER === 'console';
+  /**
+   * Render the approved report and proposal the draft says it is attaching.
+   *
+   * Built from the same builder the export routes use, so the attachment is
+   * the document that was downloaded and approved rather than a second
+   * rendering that could drift from it.
+   *
+   * A failure here stops the send. The gate has already told the approver
+   * "Attaching approved report v2 and proposal v1", and a message going out
+   * without them would quietly contradict what the approver agreed to — and
+   * leave the recipient reading about an audit that was never enclosed.
+   */
+  const attachments: { filename: string; content: Buffer; contentType: string }[] = [];
+
+  if (draft.attachReport && draft.reportId) {
+    const doc = await buildReportDocument(draft.reportId, draft.senderName ?? undefined);
+    if (!doc) throw new AppError('The report to attach could not be found.', 409);
+    attachments.push({
+      filename: `${doc.filename}.pdf`,
+      content: await renderDocument(doc, 'pdf'),
+      contentType: 'application/pdf',
+    });
+  }
+
+  if (draft.attachProposal && draft.proposalId) {
+    const doc = await buildProposalDocument(draft.proposalId, draft.senderName ?? undefined);
+    if (!doc) throw new AppError('The proposal to attach could not be found.', 409);
+    attachments.push({
+      filename: `${doc.filename}.pdf`,
+      content: await renderDocument(doc, 'pdf'),
+      contentType: 'application/pdf',
+    });
+  }
+
   let providerId: string | null = null;
 
   if (!manual) {
@@ -95,6 +134,7 @@ export async function sendApprovedEmail(
         replyTo: draft.replyTo,
         subject: draft.subject,
         body: draft.body,
+        attachments,
       });
     } catch (err) {
       // Record why it failed and leave the draft unsent, so it is visibly
@@ -191,6 +231,7 @@ async function deliver(message: {
   replyTo: string | null;
   subject: string;
   body: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }): Promise<string> {
   switch (env.EMAIL_PROVIDER) {
     case 'smtp': {

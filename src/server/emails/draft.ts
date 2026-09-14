@@ -87,9 +87,16 @@ export async function createEmailDraft(args: {
       `we observed that ${lower(f.observation_text).replace(/\.$/, '')}${f.evidenceUrl ? ` (${f.evidenceUrl})` : ''}`,
   );
 
-  const implication = findings[0]
-    ? lower(findings[0].businessImpact).replace(/^this may /, '')
-    : null;
+  /**
+   * The finding's own wording, as its own sentence.
+   *
+   * It was being lowercased and forced into "This may ...", which produced
+   * "This may whatsApp is a common enquiry channel in this market" in a message
+   * that reached a real prospect. The catalogue's impact text is already a
+   * complete sentence written for a client to read; the safest thing to do with
+   * approved wording is leave it alone.
+   */
+  const implication = findings[0]?.businessImpact?.trim() || null;
 
   const subject = findings[0]
     ? `A quick observation about ${orgName}'s website`
@@ -102,9 +109,7 @@ export async function createEmailDraft(args: {
       ? `While reviewing ${orgName}'s public digital presence, ${joinSentences(observationSentences)}.`
       : `We recently reviewed ${orgName}'s public digital presence.`,
     '',
-    implication
-      ? `This may ${implication.replace(/\.$/, '')}.`
-      : 'We would be glad to share what we found.',
+    implication ?? 'We would be glad to share what we found.',
     '',
     `${brand.companyName} has prepared a short, evidence-based audit setting out what we observed, the quick corrections available, and a practical improvement plan.`,
     '',

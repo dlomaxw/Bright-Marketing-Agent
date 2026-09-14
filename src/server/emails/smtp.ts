@@ -29,6 +29,12 @@ export const SPACEMAIL_DEFAULTS = {
   starttlsPort: 587,
 } as const;
 
+export interface OutgoingAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface OutgoingMessage {
   to: string;
   toName: string;
@@ -37,6 +43,8 @@ export interface OutgoingMessage {
   replyTo: string | null;
   subject: string;
   body: string;
+  /** The approved report and proposal, where the draft says to attach them. */
+  attachments?: OutgoingAttachment[];
 }
 
 export interface SmtpConfigProblem {
@@ -183,6 +191,11 @@ export async function deliverBySmtp(message: OutgoingMessage): Promise<string> {
     // Plain text only. These are one-to-one business messages, and plain text
     // avoids both the tracking-pixel question and the HTML rendering lottery.
     text: message.body,
+    attachments: (message.attachments ?? []).map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType,
+    })),
     headers: {
       /**
        * A recipient who wants out must be able to get out without composing a
