@@ -2,6 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { getSessionUser, type SessionUser } from './session';
 import { can, type Action } from './permissions';
+import type { Role } from '@/lib/enums';
 import { logActivity } from '@/server/activity';
 
 export class AuthError extends Error {
@@ -60,14 +61,31 @@ export async function requirePagePermission(action: Action): Promise<SessionUser
  * Separation of duties: nobody approves their own work, whatever their role.
  * Enforced server-side so a UI change can never weaken it.
  */
+/**
+ * Returns true when the approver is also the submitter.
+ *
+ * Kept separate from the throwing check so a caller can record that a
+ * self-approval happened. It is permitted for some roles, but it is never
+ * invisible.
+ */
+export function isSelfApproval(
+  approverId: string,
+  submitterId: string | null | undefined,
+): boolean {
+  return Boolean(submitterId) && approverId === submitterId;
+}
+
 export function assertNotSelfApproval(
   approverId: string,
   submitterId: string | null | undefined,
+  role?: Role,
 ): void {
-  if (submitterId && approverId === submitterId) {
-    throw new AuthError(
-      'You submitted this item, so you cannot approve it. A second person must review it.',
-      403,
-    );
-  }
+  if (!isSelfApproval(approverId, submitterId)) return;
+  // Administrators may approve their own submission; everyone else may not.
+  if (role && can(role, 'approval.self_approve')) return;
+
+  throw new AuthError(
+    'You submitted this item, so you cannot approve it. A second person must review it.',
+    403,
+  );
 }

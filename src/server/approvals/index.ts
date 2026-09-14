@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { AppError } from '@/lib/api';
-import { assertNotSelfApproval } from '@/server/auth/guard';
+import { assertNotSelfApproval, isSelfApproval } from '@/server/auth/guard';
 import { logActivity } from '@/server/activity';
 import type { SessionUser } from '@/server/auth/session';
 
@@ -184,7 +184,20 @@ export async function decideApproval(
     );
   }
 
-  assertNotSelfApproval(user.id, approval.submittedById);
+  /**
+   * Separation of duties, with an administrator exemption.
+   *
+   * The default stands: whoever submitted something should not be the one who
+   * signs it off. Administrators may, because in a small team the same person
+   * often does both, and a control nobody can satisfy gets worked around
+   * rather than observed.
+   *
+   * Where it is used the log says so in as many words. A record implying a
+   * second person reviewed something when nobody did would be worse than
+   * having no control at all.
+   */
+  assertNotSelfApproval(user.id, approval.submittedById, user.role);
+  const selfApproved = isSelfApproval(user.id, approval.submittedById);
 
   if (decision === 'rejected' && !comment?.trim()) {
     throw new AppError('A comment is required when rejecting, so the author knows what to change.', 400);
@@ -218,7 +231,11 @@ export async function decideApproval(
     entityId: id,
     previousValue: entity.status,
     newValue: nextStatus,
-    reason: comment ?? null,
+    reason: selfApproved
+      ? [comment, 'Approved by the same person who submitted it (administrator exemption).']
+          .filter(Boolean)
+          .join(' — ')
+      : (comment ?? null),
   });
 }
 

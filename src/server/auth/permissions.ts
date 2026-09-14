@@ -28,6 +28,16 @@ export const ACTIONS = [
   'email.draft', 'email.edit', 'email.submit', 'email.approve', 'email.reject', 'email.send',
   'email.cancel',
   'suppression.read', 'suppression.write',
+  /**
+   * Approve something you submitted yourself.
+   *
+   * Separation of duties is the default and stays the default: a second pair
+   * of eyes before a message reaches a business is the point of the control.
+   * Administrators are exempt because in a small team the same person often
+   * does both, and a control nobody can satisfy gets worked around rather
+   * than observed. Where it is used, the activity log says so explicitly.
+   */
+  'approval.self_approve',
   // crm
   'pipeline.read', 'pipeline.update_stage',
   'task.read', 'task.write', 'meeting.write', 'note.write',
