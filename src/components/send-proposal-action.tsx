@@ -35,10 +35,18 @@ export function SendProposalAction({
     setBusy(true);
     setError(null);
     try {
+      /**
+       * `reuseExisting` so pressing this twice does not stack up drafts.
+       *
+       * It did: four separate drafts accumulated for one company, two of them
+       * separately approved, because each press created a new record rather
+       * than returning the one already in flight. Approving one then left the
+       * others untouched, which looked exactly like an approval not sticking.
+       */
       const res = await fetch(`/api/organizations/${organizationId}/emails`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ proposalId, reportId }),
+        body: JSON.stringify({ proposalId, reportId, reuseExisting: true }),
       });
       const payload = await res.json();
       const data = payload?.data ?? payload;
