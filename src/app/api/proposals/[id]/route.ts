@@ -60,11 +60,8 @@ export const PATCH = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   const proposal = await db.proposal.findUnique({ where: { id }, include: { items: true } });
   if (!proposal || proposal.deletedAt) throw notFound('Proposal');
 
-  if (['approved', 'superseded'].includes(proposal.status)) {
-    throw badRequest(
-      `This proposal is ${proposal.status} and cannot be edited. Generate a new version to make changes.`,
-    );
-  }
+  // Approved is handled further down: the edit is allowed and withdraws the
+  // approval. Superseded is refused there too. Nothing is rejected here.
 
   const touchesCommercials =
     COMMERCIAL_KEYS.some((k) => input[k] !== undefined) || input.confirmCommercials;
