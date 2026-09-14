@@ -102,3 +102,47 @@ export const PATCH = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
 
   return ok({ id, changed: true });
 });
+
+/**
+ * Discards an email draft.
+ *
+ * A soft delete, and refused once the message has left the building. A sent
+ * email is a thing a real business received: the outbox is the record of what
+ * was said to them and when, and deleting the row would not unsend it — it
+ * would only remove our ability to answer for it.
+ *
+ * Unsent drafts are fair game. Most of them are the agent's output that a
+ * person decided against, and a review queue nobody can clear is a queue that
+ * gets ignored.
+ */
+export const DELETE = apiHandler<Ctx>(async (_req: NextRequest, ctx) => {
+  const { id } = await ctx.params;
+  const user = await requirePermission('email.cancel');
+
+  const draft = await db.emailDraft.findUnique({
+    where: { id },
+    select: { id: true, status: true, organizationId: true, deletedAt: true, sentAt: true },
+  });
+  if (!draft || draft.deletedAt) throw notFound('Email draft');
+
+  if (draft.sentAt || ['sent', 'delivered', 'replied', 'bounced'].includes(draft.status)) {
+    throw badRequest(
+      'This email was sent, so it is part of the record of what the client received. It cannot be deleted.',
+    );
+  }
+
+  await db.emailDraft.update({ where: { id }, data: { deletedAt: new Date() } });
+
+  await logActivity({
+    organizationId: draft.organizationId,
+    actorId: user.id,
+    action: 'email.deleted',
+    entityType: 'email',
+    entityId: id,
+    previousValue: draft.status,
+    newValue: 'deleted',
+    reason: 'Draft discarded before sending.',
+  });
+
+  return ok({ id, deleted: true });
+});

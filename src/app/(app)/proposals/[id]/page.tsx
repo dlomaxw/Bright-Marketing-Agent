@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { ProposalEditor } from '@/components/proposal-editor';
 import { SendProposalAction } from '@/components/send-proposal-action';
+import { DeleteAction } from '@/components/delete-action';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,6 +108,14 @@ export default async function ProposalDetail({ params }: { params: Promise<{ id:
             <a href={`/api/proposals/${proposal.id}/export?format=pdf`} className="rounded-md border border-line bg-white px-3 py-1.5 text-[13px] font-semibold text-navy hover:bg-canvas">
               Export PDF
             </a>
+            {proposal.status !== 'approved' && can(user.role, 'proposal.edit') && (
+              <DeleteAction
+                endpoint={`/api/proposals/${proposal.id}`}
+                label="Delete"
+                confirmLabel="Delete this proposal"
+                redirectTo={`/leads/${proposal.organization.id}`}
+              />
+            )}
             <a href={`/api/proposals/${proposal.id}/export?format=docx`} className="rounded-md border border-line bg-white px-3 py-1.5 text-[13px] font-semibold text-navy hover:bg-canvas">
               Export DOCX
             </a>

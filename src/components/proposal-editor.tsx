@@ -91,6 +91,21 @@ export function ProposalEditor({
     setDirty(true);
   };
 
+  /**
+   * Lines the user removed, sent with the next save.
+   *
+   * Held rather than deleted immediately so removal is part of the same save
+   * as every other edit — one action to undo by navigating away, and no
+   * half-applied state if the save fails.
+   */
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+
+  const removeLine = (id: string) => {
+    setLines((ls) => ls.filter((l) => l.id !== id));
+    setRemovedIds((ids) => [...ids, id]);
+    setDirty(true);
+  };
+
   const setLine = (id: string, patch: Partial<Item>) => {
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     setDirty(true);
@@ -118,6 +133,7 @@ export function ProposalEditor({
           taxRate: form.taxRate,
           validUntil: form.validUntil || null,
           items: lines.map((l) => ({ id: l.id, quantity: l.quantity, unitFee: l.unitFee, phase: l.phase })),
+          removeItemIds: removedIds,
           confirmCommercials,
         }),
       });
@@ -227,6 +243,7 @@ export function ProposalEditor({
                     <th scope="col" className="text-right">Qty</th>
                     <th scope="col" className="text-right">Unit fee ({proposal.currency})</th>
                     <th scope="col" className="text-right">Line total</th>
+                    <th scope="col" className="w-8"><span className="sr-only">Remove</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -283,6 +300,19 @@ export function ProposalEditor({
                       <td className="text-right numeric font-medium">
                         {money(line.quantity * line.unitFee, proposal.currency)}
                       </td>
+                      <td className="text-right">
+                        {permissions.edit && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(line.id)}
+                            title="Remove this line from the proposal"
+                            aria-label={`Remove ${line.name}`}
+                            className="rounded px-1.5 py-0.5 text-[12px] font-semibold text-muted hover:bg-critical-bg hover:text-critical"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -291,8 +321,9 @@ export function ProposalEditor({
 
             {unpriced.length > 0 && (
               <p className="mt-2 rounded border border-[#f3c6c3] bg-critical-bg px-2.5 py-1.5 text-[12px] text-critical">
-                {unpriced.length} line(s) have no fee. Every line must be priced before this proposal
-                can be submitted.
+                {unpriced.length} line(s) have no fee. That is fine — a proposal with no figures
+                goes out as a scope of work, and fees are agreed with the client. Price every line
+                only if you intend a fixed quotation.
               </p>
             )}
 

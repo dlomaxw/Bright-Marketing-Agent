@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { requirePagePermission } from '@/server/auth/guard';
 import { can } from '@/server/auth/permissions';
 import { evaluateGates } from '@/server/emails/gates';
+import { DeleteAction } from '@/components/delete-action';
 import { EMAIL_STATUS_LABELS, type EmailStatus } from '@/lib/enums';
 import { integrations, env } from '@/lib/env';
 import {
@@ -75,7 +76,22 @@ export default async function EmailDetail({ params }: { params: Promise<{ id: st
         }
         title={draft.subject || 'Untitled draft'}
         description={`Version ${draft.version} · drafted by ${draft.author?.name ?? 'unknown'} ${relativeAge(draft.createdAt)}`}
-        actions={<Badge tone={sent ? 'good' : status === 'approved' ? 'blue' : 'neutral'}>{EMAIL_STATUS_LABELS[status]}</Badge>}
+        actions={
+          <>
+            <Badge tone={sent ? 'good' : status === 'approved' ? 'blue' : 'neutral'}>
+              {EMAIL_STATUS_LABELS[status]}
+            </Badge>
+            {/* A sent message is refused server-side; the button is hidden too. */}
+            {!sent && can(user.role, 'email.cancel') && (
+              <DeleteAction
+                endpoint={`/api/emails/${draft.id}`}
+                label="Delete draft"
+                confirmLabel="Delete this draft"
+                redirectTo={`/leads/${draft.organizationId}`}
+              />
+            )}
+          </>
+        }
       />
 
       {!integrations.emailProvider && !sent && (
