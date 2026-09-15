@@ -5,6 +5,7 @@ import { apiHandler, badRequest, body, notFound, ok } from '@/lib/api';
 import { requirePermission } from '@/server/auth/guard';
 import { changedFields, logActivity } from '@/server/activity';
 import { emailKey } from '@/lib/normalize';
+import { resolveAttachmentLink } from '@/server/emails/attachments';
 
 const schema = z.object({
   subject: z.string().max(200).optional(),
@@ -12,6 +13,15 @@ const schema = z.object({
   contactId: z.string().nullable().optional(),
   attachReport: z.boolean().optional(),
   attachProposal: z.boolean().optional(),
+  /**
+   * Which documents the message encloses.
+   *
+   * Separate from the flags above because the flag alone attaches nothing: the
+   * send path renders `reportId` and `proposalId`, and a flag set against a
+   * null link produced a message that promised an audit and carried none.
+   */
+  reportId: z.string().nullable().optional(),
+  proposalId: z.string().nullable().optional(),
   status: z.literal('cancelled').optional(),
 });
 
@@ -55,8 +65,32 @@ export const PATCH = apiHandler<Ctx>(async (req: NextRequest, ctx) => {
   const data: Record<string, unknown> = {};
   if (input.subject !== undefined) data.subject = input.subject;
   if (input.body !== undefined) data.body = input.body;
-  if (input.attachReport !== undefined) data.attachReport = input.attachReport;
-  if (input.attachProposal !== undefined) data.attachProposal = input.attachProposal;
+  if (input.reportId !== undefined || input.proposalId !== undefined) {
+    const link = await resolveAttachmentLink(draft.organizationId, {
+      ...(input.reportId !== undefined ? { reportId: input.reportId } : {}),
+      ...(input.proposalId !== undefined ? { proposalId: input.proposalId } : {}),
+    });
+    Object.assign(data, link.data);
+  }
+
+  /**
+   * The flags follow the links, never lead them. Turning a flag on with nothing
+   * linked is refused rather than accepted and silently ignored at send time.
+   */
+  if (input.attachReport !== undefined) {
+    const linked = (data.reportId as string | null | undefined) ?? draft.reportId;
+    if (input.attachReport && !linked) {
+      throw badRequest('There is no report linked to this draft, so there is nothing to attach. Choose an approved report first.');
+    }
+    data.attachReport = input.attachReport;
+  }
+  if (input.attachProposal !== undefined) {
+    const linked = (data.proposalId as string | null | undefined) ?? draft.proposalId;
+    if (input.attachProposal && !linked) {
+      throw badRequest('There is no proposal linked to this draft, so there is nothing to attach. Choose an approved proposal first.');
+    }
+    data.attachProposal = input.attachProposal;
+  }
 
   if (input.contactId !== undefined) {
     if (input.contactId === null || input.contactId === '') {

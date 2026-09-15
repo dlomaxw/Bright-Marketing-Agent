@@ -67,7 +67,7 @@ async function txt(name: string): Promise<string[]> {
 }
 
 /** MX lookups get the same per-resolver treatment as TXT, for the same reason. */
-async function mxRecords(name: string): Promise<{ exchange: string; priority: number }[]> {
+export async function mxRecords(name: string): Promise<{ exchange: string; priority: number }[]> {
   for (const server of RESOLVER_SERVERS) {
     try {
       const records = await resolverFor(server).resolveMx(name);
@@ -296,5 +296,49 @@ export async function fetchSpaceshipDnsRecords(domain: string): Promise<Spaceshi
       records: [],
       message: `Could not reach the Spaceship API: ${err instanceof Error ? err.message : String(err)}`,
     };
+  }
+}
+
+
+/**
+ * Whether a domain can receive mail at all.
+ *
+ * A recipient domain with no MX record has no mail server: the message is
+ * accepted for relay, travels, and then fails permanently. Two of the first
+ * seven messages this application sent bounced for exactly this — the
+ * addresses came from a printed directory and the domains no longer carry
+ * mail.
+ *
+ * Bounces are not just a lost message. Mailbox providers read bounce rate as a
+ * primary spam signal, and a young sending domain cannot afford many. Checking
+ * first costs one DNS lookup.
+ */
+/**
+ * Names reserved by RFC 2606 and RFC 6761 so that they can never resolve.
+ *
+ * The fixtures address mail to `client.test`, which correctly has no MX record
+ * anywhere — so this check failed every fixture-based test the moment it was
+ * added. Special-casing them is the honest fix: these names exist precisely to
+ * be unroutable, no real prospect can ever hold one, and a check that fails the
+ * whole suite on every run gets switched off rather than heeded.
+ */
+const RESERVED_TLDS = ['test', 'example', 'invalid', 'localhost'];
+const RESERVED_DOMAINS = ['example.com', 'example.net', 'example.org'];
+
+function isReservedName(domain: string): boolean {
+  const tld = domain.split('.').pop() ?? '';
+  return RESERVED_TLDS.includes(tld) || RESERVED_DOMAINS.includes(domain);
+}
+
+export async function domainHasMx(email: string): Promise<boolean> {
+  const domain = email.split('@')[1]?.trim().toLowerCase();
+  if (!domain) return false;
+  if (isReservedName(domain)) return true;
+  try {
+    const records = await mxRecords(domain);
+    return records.length > 0;
+  } catch {
+    // A lookup that fails is not proof of absence, so it does not block.
+    return true;
   }
 }

@@ -17,6 +17,8 @@ import {
   relativeAge,
 } from '@/components/ui';
 import { EmailWorkbench } from '@/components/email-workbench';
+import { AttachmentPicker } from '@/components/attachment-picker';
+import { attachableDocuments } from '@/server/emails/attachments';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +58,11 @@ export default async function EmailDetail({ params }: { params: Promise<{ id: st
   const gates = await evaluateGates(draft.id);
   const status = draft.status as EmailStatus;
   const sent = ['sent', 'delivered', 'replied', 'bounced'].includes(status);
+
+  // The approved documents this message could enclose. Offered on the draft
+  // screen because the link used to be fixed at creation: a draft written
+  // before its proposal existed enclosed nothing, permanently.
+  const attachable = await attachableDocuments(draft.organizationId);
 
   const contacts = await db.contact.findMany({
     where: { organizationId: draft.organizationId, deletedAt: null },
@@ -240,6 +247,16 @@ export default async function EmailDetail({ params }: { params: Promise<{ id: st
                 ) : (
                   <span className="text-muted-soft">None</span>
                 )}
+              </DefinitionRow>
+              <DefinitionRow label="Enclose with this message">
+                <AttachmentPicker
+                  draftId={draft.id}
+                  reports={attachable.reports}
+                  proposals={attachable.proposals}
+                  selectedReportId={draft.attachReport ? draft.reportId : null}
+                  selectedProposalId={draft.attachProposal ? draft.proposalId : null}
+                  editable={can(user.role, 'email.edit') && !sent && draft.status !== 'approved'}
+                />
               </DefinitionRow>
               {draft.sentAt && (
                 <>

@@ -3,6 +3,7 @@ import { emailKey } from '@/lib/normalize';
 import { SENSITIVE_SECTORS, type Sector } from '@/lib/enums';
 import { getSetting } from '@/server/settings';
 import { BANNED_PATTERNS } from '@/ai/contract';
+import { domainHasMx } from './dns-readiness';
 
 /**
  * The send gates.
@@ -293,7 +294,44 @@ export async function evaluateGates(emailDraftId: string): Promise<GateReport> {
     ].filter(Boolean);
     gates.push(pass('attachments', 'Attachments approved', `Attaching approved ${parts.join(' and ')}.`));
   } else {
-    gates.push(pass('attachments', 'Attachments', 'No attachments.'));
+    /**
+     * Nothing is enclosed. That is legitimate for a first approach, and wrong
+     * whenever an approved document for this company is sitting unsent.
+     *
+     * "No attachments" was a plain pass, which is how four of the first seven
+     * messages to real businesses went out empty — including one whose approved
+     * proposal had been written the same minute as the draft. A check that
+     * reports the absence of something as fine, without looking at whether it
+     * should have been there, is the most misleading kind.
+     */
+    const [approvedReport, approvedProposal] = await Promise.all([
+      db.report.findFirst({
+        where: { organizationId: draft.organizationId, deletedAt: null, status: 'approved' },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      }),
+      db.proposal.findFirst({
+        where: { organizationId: draft.organizationId, deletedAt: null, status: 'approved' },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      }),
+    ]);
+    const available = [
+      approvedReport ? `audit report v${approvedReport.version}` : null,
+      approvedProposal ? `proposal v${approvedProposal.version}` : null,
+    ].filter(Boolean);
+
+    if (available.length > 0) {
+      gates.push(
+        warn(
+          'attachments',
+          'Attachments',
+          `This message encloses nothing, but ${available.join(' and ')} ${available.length === 1 ? 'is' : 'are'} approved and not attached. Attach ${available.length === 1 ? 'it' : 'them'} on this screen, or send deliberately without.`,
+        ),
+      );
+    } else {
+      gates.push(pass('attachments', 'Attachments', 'No attachments, and no approved document to enclose.'));
+    }
   }
 
   // 9 - Content approval ----------------------------------------------------
@@ -354,6 +392,34 @@ export async function evaluateGates(emailDraftId: string): Promise<GateReport> {
     );
   } else {
     gates.push(pass('duplicate', 'Not already sent', 'No previous send recorded for this draft.'));
+  }
+
+  // 12 - The recipient domain can actually receive mail ----------------------
+  //
+  // A domain with no MX record has no mail server. The message is accepted for
+  // relay, travels, and fails permanently — two of the first seven messages
+  // sent here bounced for exactly this, because the addresses came from a
+  // printed directory and those domains no longer carry mail.
+  //
+  // The cost of not checking is not a lost message. Mailbox providers read
+  // bounce rate as a primary spam signal, and a sending domain with no history
+  // cannot afford many. One DNS lookup avoids it.
+  if (draft.toEmail) {
+    const deliverable = await domainHasMx(draft.toEmail);
+    const domain = draft.toEmail.split('@')[1] ?? draft.toEmail;
+    if (!deliverable) {
+      gates.push(
+        fail(
+          'recipient_domain',
+          'Recipient domain accepts mail',
+          `${domain} publishes no MX record, so it has no mail server and this message would bounce. Find a current address for this business, or mark the contact outdated.`,
+        ),
+      );
+    } else {
+      gates.push(
+        pass('recipient_domain', 'Recipient domain accepts mail', `${domain} publishes an MX record.`),
+      );
+    }
   }
 
   const blocking = gates.filter((g) => g.status === 'fail');

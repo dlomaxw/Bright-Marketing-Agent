@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { evaluateGates } from '@/server/emails/gates';
 import { sendApprovedEmail } from '@/server/emails/send';
 import { decideApproval, submitForApproval } from '@/server/approvals';
+import { resolveAttachmentLink } from '@/server/emails/attachments';
 import type { SessionUser } from '@/server/auth/session';
 
 /**
@@ -419,5 +420,87 @@ describe('sending', () => {
     expect(gate(report, 'frequency')?.status).toBe('fail');
     expect(gate(report, 'frequency')?.detail).toMatch(/cap/i);
     expect(report.sendable).toBe(false);
+  });
+});
+
+describe('attachments', () => {
+  /**
+   * Four of the first seven messages this application sent to real businesses
+   * enclosed nothing, because the link between a draft and its documents was
+   * set only when the draft was created — and one of those companies had an
+   * approved proposal written the same minute. The checklist reported "No
+   * attachments" and passed it.
+   */
+  async function approvedProposal(organizationId: string) {
+    return db.proposal.create({
+      data: {
+        organizationId,
+        version: 1,
+        title: 'Digital presence proposal',
+        status: 'approved',
+        currency: 'UGX',
+      },
+    });
+  }
+
+  it('says so when an approved proposal exists and the message encloses nothing', async () => {
+    const fixture = await buildSendableDraft();
+    await approvedProposal(fixture.organizationId);
+    await approve(fixture);
+
+    const report = await evaluateGates(fixture.draftId);
+    const attachments = gate(report, 'attachments');
+
+    expect(attachments?.status).toBe('warn');
+    expect(attachments?.detail).toContain('proposal v1');
+    // A warning, not a block: a first approach carrying nothing is legitimate.
+    expect(report.sendable).toBe(true);
+  });
+
+  it('passes quietly when there is no approved document to enclose', async () => {
+    const fixture = await buildSendableDraft();
+    await approve(fixture);
+
+    expect(gate(await evaluateGates(fixture.draftId), 'attachments')?.status).toBe('pass');
+  });
+
+  it('links an approved proposal to an existing draft', async () => {
+    const fixture = await buildSendableDraft();
+    const proposal = await approvedProposal(fixture.organizationId);
+
+    const link = await resolveAttachmentLink(fixture.organizationId, { proposalId: proposal.id });
+    await db.emailDraft.update({ where: { id: fixture.draftId }, data: link.data });
+    await approve(fixture);
+
+    const report = await evaluateGates(fixture.draftId);
+    expect(gate(report, 'attachments')?.status).toBe('pass');
+    expect(gate(report, 'attachments')?.detail).toContain('Attaching approved proposal v1');
+  });
+
+  it('refuses to attach a proposal that is not approved', async () => {
+    const fixture = await buildSendableDraft();
+    const draftProposal = await db.proposal.create({
+      data: {
+        organizationId: fixture.organizationId,
+        version: 1,
+        title: 'Unapproved',
+        status: 'draft',
+        currency: 'UGX',
+      },
+    });
+
+    await expect(
+      resolveAttachmentLink(fixture.organizationId, { proposalId: draftProposal.id }),
+    ).rejects.toThrow(/not approved|"draft"/i);
+  });
+
+  it('refuses to attach a document belonging to another organization', async () => {
+    const mine = await buildSendableDraft();
+    const theirs = await buildSendableDraft();
+    const proposal = await approvedProposal(theirs.organizationId);
+
+    await expect(
+      resolveAttachmentLink(mine.organizationId, { proposalId: proposal.id }),
+    ).rejects.toThrow(/does not belong/i);
   });
 });
